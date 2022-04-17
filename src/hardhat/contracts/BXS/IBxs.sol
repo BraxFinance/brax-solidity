@@ -3,7 +3,7 @@ pragma solidity >=0.6.11;
 
 interface IBxs {
   function DEFAULT_ADMIN_ROLE() external view returns(bytes32);
-  function BRAXStablecoinAdd() external view returns(address);
+  function BRAXBtcSynthAdd() external view returns(address);
   function BXS_DAO_min() external view returns(uint256);
   function allowance(address owner, address spender) external view returns(uint256);
   function approve(address spender, uint256 amount) external returns(bool);
@@ -31,8 +31,8 @@ interface IBxs {
   function pool_mint(address m_address, uint256 m_amount) external;
   function renounceRole(bytes32 role, address account) external;
   function revokeRole(bytes32 role, address account) external;
-  function setBRAXAddress(address frax_contract_address) external;
-  function setBXSMinDAO(uint256 min_FXS) external;
+  function setBRAXAddress(address brax_contract_address) external;
+  function setBXSMinDAO(uint256 min_BXS) external;
   function setOracle(address new_oracle) external;
   function setOwner(address _owner_address) external;
   function setTimelock(address new_timelock) external;

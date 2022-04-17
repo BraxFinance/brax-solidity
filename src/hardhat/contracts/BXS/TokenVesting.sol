@@ -36,8 +36,8 @@ contract TokenVesting {
     uint256 private _start;
     uint256 private _duration;
 
-    address public _FXS_contract_address;
-    ERC20 FXS;
+    address public _BXS_contract_address;
+    ERC20 BXS;
     address public _timelock_address;
     bool public _revocable;
 
@@ -77,10 +77,10 @@ contract TokenVesting {
         _owner = msg.sender;
     }
 
-    function setFXSAddress(address FXS_address) public {
+    function setBXSAddress(address BXS_address) public {
         require(msg.sender == _owner, "must be set by the owner");
-        _FXS_contract_address = FXS_address;
-        FXS = ERC20(FXS_address);
+        _BXS_contract_address = BXS_address;
+        BXS = ERC20(BXS_address);
     }
 
     function setTimelockAddress(address timelock_address) public {
@@ -148,7 +148,7 @@ contract TokenVesting {
 
         _released = _released.add(unreleased);
 
-        FXS.transfer(_beneficiary, unreleased);
+        BXS.transfer(_beneficiary, unreleased);
 
         emit TokensReleased(unreleased);
     }
@@ -162,14 +162,14 @@ contract TokenVesting {
         require(_revocable, "TokenVesting: cannot revoke");
         require(!_revoked, "TokenVesting: token already revoked");
 
-        uint256 balance = FXS.balanceOf(address(this));
+        uint256 balance = BXS.balanceOf(address(this));
 
         uint256 unreleased = _releasableAmount();
         uint256 refund = balance.sub(unreleased);
 
         _revoked = true;
 
-        FXS.transfer(_owner, refund);
+        BXS.transfer(_owner, refund);
 
         emit TokenVestingRevoked();
     }
@@ -179,7 +179,7 @@ contract TokenVesting {
         require(msg.sender == _beneficiary, "Must be called by the beneficiary");
 
         // Cannot recover the staking token or the rewards token
-        require(tokenAddress != _FXS_contract_address, "Cannot withdraw the FXS through this function");
+        require(tokenAddress != _BXS_contract_address, "Cannot withdraw the BXS through this function");
         ERC20(tokenAddress).transfer(_beneficiary, tokenAmount);
     }
 
@@ -195,7 +195,7 @@ contract TokenVesting {
      * @dev Calculates the amount that has already vested.
      */
     function _vestedAmount() private view returns (uint256) {
-        uint256 currentBalance = FXS.balanceOf(address(this));
+        uint256 currentBalance = BXS.balanceOf(address(this));
         uint256 totalBalance = currentBalance.add(_released);
         if (block.timestamp < _cliff) {
             return 0;

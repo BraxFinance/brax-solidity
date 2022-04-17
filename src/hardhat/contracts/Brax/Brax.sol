@@ -31,19 +31,19 @@ import "../Staking/Owned.sol";
 import "../BXS/BXS.sol";
 import "./Pools/BraxPoolV3.sol";
 import "../Oracle/UniswapPairOracle.sol";
-import "../Oracle/ChainlinkBTCUSDPriceConsumer.sol";
+import "../Oracle/ChainlinkWBTCBTCPriceConsumer.sol";
 import "../Governance/AccessControl.sol";
 
-contract FRAXStablecoin is ERC20Custom, AccessControl, Owned {
+contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
     using SafeMath for uint256;
 
     /* ========== STATE VARIABLES ========== */
     enum PriceChoice { BRAX, BXS }
     // TODO: Address oracles (which oracles will we use, how to get BRAX and BXS pricing)
-    ChainlinkBTCUSDPriceConsumer private btc_usd_pricer;
-    uint8 private btc_usd_pricer_decimals;
-    UniswapPairOracle private braxBtcOracle;
-    UniswapPairOracle private bxsBtcOracle;
+    ChainlinkWBTCBTCPriceConsumer private wbtc_btc_pricer;
+    uint8 private wbtc_btc_pricer_decimals;
+    UniswapPairOracle private braxWBtcOracle;
+    UniswapPairOracle private bxsWBtcOracle;
     string public symbol;
     string public name;
     uint8 public constant decimals = 18;
@@ -51,11 +51,11 @@ contract FRAXStablecoin is ERC20Custom, AccessControl, Owned {
     address public timelock_address; // Governance timelock address
     address public controller_address; // Controller contract to dynamically adjust system parameters automatically
     address public bxs_address;
-    address public brax_eth_oracle_address;
-    address public bxs_eth_oracle_address;
-    address public weth_address;
-    address public eth_usd_consumer_address;
-    uint256 public constant genesis_supply = 5000e18; // 5k BRAX. This is to help with establishing the Uniswap pools, as they need liquidity
+    address public brax_wbtc_oracle_address;
+    address public bxs_wbtc_oracle_address;
+    address public wbtc_address;
+    address public wbtc_btc_consumer_address;
+    uint256 public constant genesis_supply = 50e18; // 50 BRAX. This is to help with establishing the Uniswap pools, as they need liquidity
 
     // The addresses in this array are added by the oracle and these contracts are able to mint brax
     address[] public brax_pools_array;
@@ -73,34 +73,23 @@ contract FRAXStablecoin is ERC20Custom, AccessControl, Owned {
     uint256 public refresh_cooldown; // Seconds to wait before being able to run refreshCollateralRatio() again
     uint256 public price_target; // The price of BRAX at which the collateral ratio will respond to; this value is only used for the collateral ratio mechanism and not for minting and redeeming which are hardcoded at 1 BTC
     uint256 public price_band; // The bound above and below the price target at which the refreshCollateralRatio() will not change the collateral ratio
+    uint256 public MAX_COLLATERAL_RATIO = 100000000;
 
     address public DEFAULT_ADMIN_ADDRESS;
     bytes32 public constant COLLATERAL_RATIO_PAUSER = keccak256("COLLATERAL_RATIO_PAUSER");
     bool public collateral_ratio_paused = false;
 
     /* ========== MODIFIERS ========== */
-    // CHECKED
     modifier onlyCollateralRatioPauser() {
-        require(hasRole(COLLATERAL_RATIO_PAUSER, msg.sender));
+        require(hasRole(COLLATERAL_RATIO_PAUSER, msg.sender), "!pauser");
         _;
     }
-    // CHECKED
     modifier onlyPools() {
        require(brax_pools[msg.sender] == true, "Only brax pools can call this function");
         _;
     } 
-    // CHECKED
     modifier onlyByOwnerGovernanceOrController() {
         require(msg.sender == owner || msg.sender == timelock_address || msg.sender == controller_address, "Not the owner, controller, or the governance timelock");
-        _;
-    }
-    // CHECKED
-    modifier onlyByOwnerGovernanceOrPool() {
-        require(
-            msg.sender == owner 
-            || msg.sender == timelock_address 
-            || brax_pools[msg.sender] == true, 
-            "Not the owner, the governance timelock, or a pool");
         _;
     }
 
@@ -125,67 +114,66 @@ contract FRAXStablecoin is ERC20Custom, AccessControl, Owned {
         brax_step = 250000; // 8 decimals of precision, equal to 0.25%
         global_collateral_ratio = 100000000; // brax system starts off fully collateralized (8 decimals of precision)
         refresh_cooldown = 3600; // Refresh cooldown period is set to 1 hour (3600 seconds) at genesis
-        price_target = 100000000; // Collateral ratio will adjust according to the 1 BTC price target at genesis
-        price_band = 500000; // Collateral ratio will not adjust if between 0.995 BTC and 1.005 BTC at genesis
+        price_target = 100000000; // Collateral ratio will adjust according to the 1 BTC price target at genesis (e8)
+        price_band = 500000; // Collateral ratio will not adjust if between 0.995 BTC and 1.005 BTC at genesis (e8)
     }
 
     /* ========== VIEWS ========== */
 
-    // Choice = 'BRAX' or 'BXS' for now
+    /// @dev Retrieves oracle price for the provided PriceChoice enum
+    /// @param choice Token to return pricing information for
+    /// @return price X tokens required for 1 BTC
     function oracle_price(PriceChoice choice) internal view returns (uint256) {
-        // Get the ETH / USD price first, and cut it down to 1e6 precision
-        uint256 __eth_usd_price = uint256(eth_usd_pricer.getLatestPrice()).mul(PRICE_PRECISION).div(uint256(10) ** eth_usd_pricer_decimals);
-        uint256 price_vs_eth = 0;
+        uint256 __wbtc_btc_price = uint256(uint256(wbtc_btc_pricer.getLatestPrice()).mul(PRICE_PRECISION).div(uint256(10) ** wbtc_btc_pricer_decimals));
+        uint256 price_vs_wbtc = 0;
 
         if (choice == PriceChoice.BRAX) {
-            price_vs_eth = uint256(fraxEthOracle.consult(weth_address, PRICE_PRECISION)); // How much FRAX if you put in PRICE_PRECISION WETH
+            price_vs_wbtc = uint256(braxWBtcOracle.consult(wbtc_address, PRICE_PRECISION)); // How much FRAX if you put in PRICE_PRECISION WBTC
         }
         else if (choice == PriceChoice.BXS) {
-            price_vs_eth = uint256(fxsEthOracle.consult(weth_address, PRICE_PRECISION)); // How much FXS if you put in PRICE_PRECISION WETH
+            price_vs_wbtc = uint256(bxsWBtcOracle.consult(wbtc_address, PRICE_PRECISION)); // How much FXS if you put in PRICE_PRECISION WBTC
         }
-        else revert("INVALID PRICE CHOICE. Needs to be either 0 (FRAX) or 1 (FXS)");
+        else revert("INVALID PRICE CHOICE. Needs to be either BRAX or BXS");
 
-        // Will be in 1e6 format
-        return __eth_usd_price.mul(PRICE_PRECISION).div(price_vs_eth);
+        return __wbtc_btc_price.mul(PRICE_PRECISION).div(price_vs_wbtc);
     }
 
-    // Returns X FRAX = 1 USD
-    function frax_price() public view returns (uint256) {
-        return oracle_price(PriceChoice.FRAX);
+    /// @return price X BRAX = 1 BTC
+    function brax_price() public view returns (uint256) {
+        return oracle_price(PriceChoice.BRAX);
     }
 
-    // Returns X FXS = 1 USD
-    function fxs_price()  public view returns (uint256) {
-        return oracle_price(PriceChoice.FXS);
+    /// @return price X BXS = 1 BTC
+    function bxs_price()  public view returns (uint256) {
+        return oracle_price(PriceChoice.BXS);
     }
 
-    function eth_usd_price() public view returns (uint256) {
-        return uint256(eth_usd_pricer.getLatestPrice()).mul(PRICE_PRECISION).div(uint256(10) ** eth_usd_pricer_decimals);
-    }
-
-    // This is needed to avoid costly repeat calls to different getter functions
-    // It is cheaper gas-wise to just dump everything and only use some of the info
-    function frax_info() public view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256) {
+    /// @dev Return all info regarding BRAX
+    /// @notice This is needed to avoid costly repeat calls to different getter functions
+    /// @notice It is cheaper gas-wise to just dump everything and only use some of the info
+    /// @return info Tuple including responses from brax_price, bxs_price, totalSupply(),
+    /// @return info global_collateral_ratio, globalCollateralValue(), minting_fee, redemption_fee
+    function brax_info() public view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256) {
         return (
-            oracle_price(PriceChoice.FRAX), // frax_price()
-            oracle_price(PriceChoice.FXS), // fxs_price()
+            oracle_price(PriceChoice.BRAX), // brax_price()
+            oracle_price(PriceChoice.BXS), // bxs_price()
             totalSupply(), // totalSupply()
             global_collateral_ratio, // global_collateral_ratio()
             globalCollateralValue(), // globalCollateralValue
             minting_fee, // minting_fee()
-            redemption_fee, // redemption_fee()
-            uint256(eth_usd_pricer.getLatestPrice()).mul(PRICE_PRECISION).div(uint256(10) ** eth_usd_pricer_decimals) //eth_usd_price
+            redemption_fee // redemption_fee()
         );
     }
 
-    // Iterate through all frax pools and calculate all value of collateral in all pools globally 
+    /// @dev Iterate through all brax pools and calculate all value of collateral in all pools globally denominated in BTC
+    /// @return balance Balance of all pools denominated in BTC
     function globalCollateralValue() public view returns (uint256) {
         uint256 total_collateral_value_d18 = 0; 
 
-        for (uint i = 0; i < frax_pools_array.length; i++){ 
+        for (uint i = 0; i < brax_pools_array.length; i++){ 
             // Exclude null addresses
-            if (frax_pools_array[i] != address(0)){
-                total_collateral_value_d18 = total_collateral_value_d18.add(FraxPool(frax_pools_array[i]).collatDollarBalance());
+            if (brax_pools_array[i] != address(0)){
+                total_collateral_value_d18 = total_collateral_value_d18.add(BraxPoolV3(brax_pools_array[i]).collatBtcBalance());
             }
 
         }
@@ -194,26 +182,26 @@ contract FRAXStablecoin is ERC20Custom, AccessControl, Owned {
 
     /* ========== PUBLIC FUNCTIONS ========== */
     
-    // There needs to be a time interval that this can be called. Otherwise it can be called multiple times per expansion.
+    /// @dev Update the collateral ratio based on the current price of FRAX
+    /// @notice last_call_time limits updates to once per hour to prevent multiple calls per expansion
     uint256 public last_call_time; // Last time the refreshCollateralRatio function was called
     function refreshCollateralRatio() public {
         require(collateral_ratio_paused == false, "Collateral Ratio has been paused");
-        uint256 frax_price_cur = frax_price();
         require(block.timestamp - last_call_time >= refresh_cooldown, "Must wait for the refresh cooldown since last refresh");
+        uint256 brax_price_cur = brax_price();
 
-        // Step increments are 0.25% (upon genesis, changable by setFraxStep()) 
-        
-        if (frax_price_cur > price_target.add(price_band)) { //decrease collateral ratio
-            if(global_collateral_ratio <= frax_step){ //if within a step of 0, go to 0
+        // Step increments are 0.25% (upon genesis, changable by setBraxStep()) 
+        if (brax_price_cur > price_target.add(price_band)) { //decrease collateral ratio
+            if(global_collateral_ratio <= brax_step){ //if within a step of 0, go to 0
                 global_collateral_ratio = 0;
             } else {
-                global_collateral_ratio = global_collateral_ratio.sub(frax_step);
+                global_collateral_ratio = global_collateral_ratio.sub(brax_step);
             }
-        } else if (frax_price_cur < price_target.sub(price_band)) { //increase collateral ratio
-            if(global_collateral_ratio.add(frax_step) >= 1000000){
-                global_collateral_ratio = 1000000; // cap collateral ratio at 1.000000
+        } else if (brax_price_cur < price_target.sub(price_band)) { //increase collateral ratio
+            if(global_collateral_ratio.add(brax_step) >= MAX_COLLATERAL_RATIO){
+                global_collateral_ratio = MAX_COLLATERAL_RATIO; // cap collateral ratio at 1.00000000
             } else {
-                global_collateral_ratio = global_collateral_ratio.add(frax_step);
+                global_collateral_ratio = global_collateral_ratio.add(brax_step);
             }
         }
 
@@ -224,41 +212,45 @@ contract FRAXStablecoin is ERC20Custom, AccessControl, Owned {
 
     /* ========== RESTRICTED FUNCTIONS ========== */
 
-    // Used by pools when user redeems
+    // Potential improvement - create Burn Pool and send BRAX there which can be burnt by governance in batches
+    // rather than opening up a burnFrom function which may be more dangerous.
+    /// @dev Burn BRAX as a step for releasing collateral
     function pool_burn_from(address b_address, uint256 b_amount) public onlyPools {
         super._burnFrom(b_address, b_amount);
-        emit FRAXBurned(b_address, msg.sender, b_amount);
+        emit BRAXBurned(b_address, msg.sender, b_amount);
     }
 
-    // This function is what other frax pools will call to mint new FRAX 
+    /// @dev Mint BRAX via pools after depositing collateral
     function pool_mint(address m_address, uint256 m_amount) public onlyPools {
         super._mint(m_address, m_amount);
-        emit FRAXMinted(msg.sender, m_address, m_amount);
+        emit BRAXMinted(msg.sender, m_address, m_amount);
     }
 
-    // Adds collateral addresses supported, such as tether and busd, must be ERC20 
+    // COVERED
+    // Adds collateral addresses supported, such as wBTC and renBTC, must be ERC20 
     function addPool(address pool_address) public onlyByOwnerGovernanceOrController {
         require(pool_address != address(0), "Zero address detected");
 
-        require(frax_pools[pool_address] == false, "Address already exists");
-        frax_pools[pool_address] = true; 
-        frax_pools_array.push(pool_address);
+        require(brax_pools[pool_address] == false, "Address already exists");
+        brax_pools[pool_address] = true; 
+        brax_pools_array.push(pool_address);
 
         emit PoolAdded(pool_address);
     }
 
+    // COVERED
     // Remove a pool 
     function removePool(address pool_address) public onlyByOwnerGovernanceOrController {
         require(pool_address != address(0), "Zero address detected");
-        require(frax_pools[pool_address] == true, "Address nonexistant");
+        require(brax_pools[pool_address] == true, "Address nonexistant");
         
         // Delete from the mapping
-        delete frax_pools[pool_address];
+        delete brax_pools[pool_address];
 
         // 'Delete' from the array by setting the address to 0x0
-        for (uint i = 0; i < frax_pools_array.length; i++){ 
-            if (frax_pools_array[i] == pool_address) {
-                frax_pools_array[i] = address(0); // This will leave a null in the array and keep the indices the same
+        for (uint i = 0; i < brax_pools_array.length; i++){ 
+            if (brax_pools_array[i] == pool_address) {
+                brax_pools_array[i] = address(0); // This will leave a null in the array and keep the indices the same
                 break;
             }
         }
@@ -266,54 +258,62 @@ contract FRAXStablecoin is ERC20Custom, AccessControl, Owned {
         emit PoolRemoved(pool_address);
     }
 
+    // COVERED
     function setRedemptionFee(uint256 red_fee) public onlyByOwnerGovernanceOrController {
         redemption_fee = red_fee;
 
         emit RedemptionFeeSet(red_fee);
     }
 
+    // COVERED
     function setMintingFee(uint256 min_fee) public onlyByOwnerGovernanceOrController {
         minting_fee = min_fee;
 
         emit MintingFeeSet(min_fee);
     }  
 
-    function setFraxStep(uint256 _new_step) public onlyByOwnerGovernanceOrController {
-        frax_step = _new_step;
+    // COVERED
+    function setBraxStep(uint256 _new_step) public onlyByOwnerGovernanceOrController {
+        brax_step = _new_step;
 
-        emit FraxStepSet(_new_step);
+        emit BraxStepSet(_new_step);
     }  
 
-    function setPriceTarget (uint256 _new_price_target) public onlyByOwnerGovernanceOrController {
+    // COVERED
+    function setPriceTarget(uint256 _new_price_target) public onlyByOwnerGovernanceOrController {
         price_target = _new_price_target;
 
         emit PriceTargetSet(_new_price_target);
     }
 
+    // COVERED
     function setRefreshCooldown(uint256 _new_cooldown) public onlyByOwnerGovernanceOrController {
     	refresh_cooldown = _new_cooldown;
 
         emit RefreshCooldownSet(_new_cooldown);
     }
 
-    function setFXSAddress(address _fxs_address) public onlyByOwnerGovernanceOrController {
-        require(_fxs_address != address(0), "Zero address detected");
+    // COVERED
+    function setBXSAddress(address _bxs_address) public onlyByOwnerGovernanceOrController {
+        require(_bxs_address != address(0), "Zero address detected");
 
-        fxs_address = _fxs_address;
+        bxs_address = _bxs_address;
 
-        emit FXSAddressSet(_fxs_address);
+        emit BXSAddressSet(_bxs_address);
     }
 
-    function setETHUSDOracle(address _eth_usd_consumer_address) public onlyByOwnerGovernanceOrController {
-        require(_eth_usd_consumer_address != address(0), "Zero address detected");
+    // COVERED
+    function setWBTCBTCOracle(address _wbtc_btc_consumer_address) public onlyByOwnerGovernanceOrController {
+        require(_wbtc_btc_consumer_address != address(0), "Zero address detected");
 
-        eth_usd_consumer_address = _eth_usd_consumer_address;
-        eth_usd_pricer = ChainlinkETHUSDPriceConsumer(eth_usd_consumer_address);
-        eth_usd_pricer_decimals = eth_usd_pricer.getDecimals();
+        wbtc_btc_consumer_address = _wbtc_btc_consumer_address;
+        wbtc_btc_pricer = ChainlinkWBTCBTCPriceConsumer(wbtc_btc_consumer_address);
+        wbtc_btc_pricer_decimals = wbtc_btc_pricer.getDecimals();
 
-        emit ETHUSDOracleSet(_eth_usd_consumer_address);
+        emit WBTCBTCOracleSet(_wbtc_btc_consumer_address);
     }
 
+    // COVERED
     function setTimelock(address new_timelock) external onlyByOwnerGovernanceOrController {
         require(new_timelock != address(0), "Zero address detected");
 
@@ -322,6 +322,7 @@ contract FRAXStablecoin is ERC20Custom, AccessControl, Owned {
         emit TimelockSet(new_timelock);
     }
 
+    // COVERED
     function setController(address _controller_address) external onlyByOwnerGovernanceOrController {
         require(_controller_address != address(0), "Zero address detected");
 
@@ -330,33 +331,35 @@ contract FRAXStablecoin is ERC20Custom, AccessControl, Owned {
         emit ControllerSet(_controller_address);
     }
 
+    // COVERED
     function setPriceBand(uint256 _price_band) external onlyByOwnerGovernanceOrController {
         price_band = _price_band;
 
         emit PriceBandSet(_price_band);
     }
 
-    // Sets the FRAX_ETH Uniswap oracle address 
-    function setFRAXEthOracle(address _frax_oracle_addr, address _weth_address) public onlyByOwnerGovernanceOrController {
-        require((_frax_oracle_addr != address(0)) && (_weth_address != address(0)), "Zero address detected");
-        frax_eth_oracle_address = _frax_oracle_addr;
-        fraxEthOracle = UniswapPairOracle(_frax_oracle_addr); 
-        weth_address = _weth_address;
+    // COVERED
+    function setBRAXWBtcOracle(address _brax_oracle_addr, address _wbtc_address) public onlyByOwnerGovernanceOrController {
+        require((_brax_oracle_addr != address(0)) && (_wbtc_address != address(0)), "Zero address detected");
+        brax_wbtc_oracle_address = _brax_oracle_addr;
+        braxWBtcOracle = UniswapPairOracle(_brax_oracle_addr); 
+        wbtc_address = _wbtc_address;
 
-        emit FRAXETHOracleSet(_frax_oracle_addr, _weth_address);
+        emit BRAXWBTCOracleSet(_brax_oracle_addr, _wbtc_address);
     }
 
-    // Sets the FXS_ETH Uniswap oracle address 
-    function setFXSEthOracle(address _fxs_oracle_addr, address _weth_address) public onlyByOwnerGovernanceOrController {
-        require((_fxs_oracle_addr != address(0)) && (_weth_address != address(0)), "Zero address detected");
+    // COVERED
+    function setBXSWBtcOracle(address _bxs_oracle_addr, address _wbtc_address) public onlyByOwnerGovernanceOrController {
+        require((_bxs_oracle_addr != address(0)) && (_wbtc_address != address(0)), "Zero address detected");
 
-        fxs_eth_oracle_address = _fxs_oracle_addr;
-        fxsEthOracle = UniswapPairOracle(_fxs_oracle_addr);
-        weth_address = _weth_address;
+        bxs_wbtc_oracle_address = _bxs_oracle_addr;
+        bxsWBtcOracle = UniswapPairOracle(_bxs_oracle_addr);
+        wbtc_address = _wbtc_address;
 
-        emit FXSEthOracleSet(_fxs_oracle_addr, _weth_address);
+        emit BXSWBTCOracleSet(_bxs_oracle_addr, _wbtc_address);
     }
 
+    // COVERED
     function toggleCollateralRatio() public onlyCollateralRatioPauser {
         collateral_ratio_paused = !collateral_ratio_paused;
 
@@ -365,26 +368,26 @@ contract FRAXStablecoin is ERC20Custom, AccessControl, Owned {
 
     /* ========== EVENTS ========== */
 
-    // Track FRAX burned
-    event FRAXBurned(address indexed from, address indexed to, uint256 amount);
+    // Track BRAX burned
+    event BRAXBurned(address indexed from, address indexed to, uint256 amount);
 
-    // Track FRAX minted
-    event FRAXMinted(address indexed from, address indexed to, uint256 amount);
+    // Track BRAX minted
+    event BRAXMinted(address indexed from, address indexed to, uint256 amount);
 
     event CollateralRatioRefreshed(uint256 global_collateral_ratio);
     event PoolAdded(address pool_address);
     event PoolRemoved(address pool_address);
     event RedemptionFeeSet(uint256 red_fee);
     event MintingFeeSet(uint256 min_fee);
-    event FraxStepSet(uint256 new_step);
+    event BraxStepSet(uint256 new_step);
     event PriceTargetSet(uint256 new_price_target);
     event RefreshCooldownSet(uint256 new_cooldown);
-    event FXSAddressSet(address _fxs_address);
-    event ETHUSDOracleSet(address eth_usd_consumer_address);
+    event BXSAddressSet(address _bxs_address);
     event TimelockSet(address new_timelock);
     event ControllerSet(address controller_address);
     event PriceBandSet(uint256 price_band);
-    event FRAXETHOracleSet(address frax_oracle_addr, address weth_address);
-    event FXSEthOracleSet(address fxs_oracle_addr, address weth_address);
+    event WBTCBTCOracleSet(address wbtc_oracle_addr);
+    event BRAXWBTCOracleSet(address brax_oracle_addr, address wbtc_address);
+    event BXSWBTCOracleSet(address bxs_oracle_addr, address wbtc_address);
     event CollateralRatioToggled(bool collateral_ratio_paused);
 }

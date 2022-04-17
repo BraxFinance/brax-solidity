@@ -2,7 +2,7 @@
 pragma solidity >=0.6.11;
 
 // MAY need to be updated
-interface IFraxAMOMinter {
+interface IBraxAMOMinter {
   function BRAX() external view returns(address);
   function BXS() external view returns(address);
   function acceptOwnership() external;

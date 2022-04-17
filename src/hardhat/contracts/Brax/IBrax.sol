@@ -17,7 +17,6 @@ interface IBrax {
   function decimals() external view returns (uint8);
   function decreaseAllowance(address spender, uint256 subtractedValue ) external returns (bool);
   function btc_usd_consumer_address() external view returns (address);
-  function btc_usd_price() external view returns (uint256);
   function brax_btc_oracle_address() external view returns (address);
   function brax_info() external view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256);
   function brax_pools(address ) external view returns (bool);
@@ -51,10 +50,10 @@ interface IBrax {
   function renounceRole(bytes32 role, address account ) external;
   function revokeRole(bytes32 role, address account ) external;
   function setController(address _controller_address ) external;
-  function setBTCUSDOracle(address _eth_usd_consumer_address ) external;
-  function setBRAXBtcOracle(address _frax_oracle_addr, address _weth_address ) external;
+  function setWBTCBTCOracle(address _eth_usd_consumer_address ) external;
+  function setBRAXWBtcOracle(address _brax_oracle_addr, address _wbtc_address ) external;
   function setBXSAddress(address _fxs_address ) external;
-  function setBXSBtcOracle(address _fxs_oracle_addr, address _weth_address ) external;
+  function setBXSBtcOracle(address _bxs_oracle_addr, address _wbtc_address ) external;
   function setBraxStep(uint256 _new_step ) external;
   function setMintingFee(uint256 min_fee ) external;
   function setOwner(address _owner_address ) external;
