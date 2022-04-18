@@ -79,6 +79,12 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
     bytes32 public constant COLLATERAL_RATIO_PAUSER = keccak256("COLLATERAL_RATIO_PAUSER");
     bool public collateral_ratio_paused = false;
 
+    // EIP2612 ERC20Permit implementation
+    // keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
+    bytes32 public constant PERMIT_TYPEHASH = 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9;
+    mapping(address => uint) public nonces;
+    bytes32 public DOMAIN_SEPARATOR;
+
     /* ========== MODIFIERS ========== */
     modifier onlyCollateralRatioPauser() {
         require(hasRole(COLLATERAL_RATIO_PAUSER, msg.sender), "!pauser");
@@ -116,6 +122,19 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
         refresh_cooldown = 3600; // Refresh cooldown period is set to 1 hour (3600 seconds) at genesis
         price_target = 100000000; // Collateral ratio will adjust according to the 1 BTC price target at genesis (e8)
         price_band = 500000; // Collateral ratio will not adjust if between 0.995 BTC and 1.005 BTC at genesis (e8)
+        uint chainId;
+        assembly {
+            chainId := chainid()
+        }
+        DOMAIN_SEPARATOR = keccak256(
+            abi.encode(
+                keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)'),
+                keccak256(bytes(name)),
+                keccak256(bytes('1')),
+                chainId,
+                address(this)
+            )
+        );
     }
 
     /* ========== VIEWS ========== */
@@ -208,6 +227,57 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
         last_call_time = block.timestamp; // Set the time of the last expansion
 
         emit CollateralRatioRefreshed(global_collateral_ratio);
+    }
+
+    /**
+     * @notice Nonces for permit
+     * @param owner Token owner's address (Authorizer)
+     * @return Next nonce
+     */
+    function permitNonces(address owner) external view returns (uint256) {
+        return nonces[owner];
+    }
+
+    /**
+     * @notice Verify a signed approval permit and execute if valid
+     * @param owner     Token owner's address (Authorizer)
+     * @param spender   Spender's address
+     * @param value     Amount of allowance
+     * @param deadline  The time at which this expires (unix time)
+     * @param v         v of the signature
+     * @param r         r of the signature
+     * @param s         s of the signature
+     */
+    function _permit(
+        address owner,
+        address spender,
+        uint256 value,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) internal {
+        require(deadline >= block.timestamp, "BRAX: permit is expired");
+
+        bytes memory data = abi.encode(
+            PERMIT_TYPEHASH,
+            owner,
+            spender,
+            value,
+            nonces[owner]++,
+            deadline
+        );
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                DOMAIN_SEPARATOR,
+                keccak256(data)
+            )
+        );
+        address recoveredAddress = ecrecover(digest, v, r, s);
+        require(recoveredAddress != address(0) && recoveredAddress == owner, 'BRAX: INVALID_SIGNATURE');
+
+        _approve(owner, spender, value);
     }
 
     /* ========== RESTRICTED FUNCTIONS ========== */
