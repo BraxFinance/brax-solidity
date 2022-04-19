@@ -18,6 +18,7 @@ export async function getPermitSignature(
 	spender: string,
 	value: BigNumberish = constants.MaxUint256,
 	deadline = constants.MaxUint256,
+	fakeOwner?: string,
 	permitConfig?: { nonce?: BigNumberish; name?: string; chainId?: number; version?: string },
 ): Promise<SignatureData> {
 	const [nonce, name, version, chainId] = await Promise.all([
@@ -28,7 +29,7 @@ export async function getPermitSignature(
 	]);
 
 	const message = {
-		owner: wallet.address,
+		owner: fakeOwner ?? wallet.address,
 		spender: spender,
 		value: value,
 		nonce: nonce,
@@ -73,7 +74,7 @@ export async function getPermitSignature(
 
 	const expectedSignerAddress = wallet.address;
 	const recoveredAddress = ethers.utils.verifyTypedData(domain, types, message, signature);
-	if (recoveredAddress !== expectedSignerAddress) {
+	if (!fakeOwner && recoveredAddress !== expectedSignerAddress) {
 		throw new Error('Error signing data, recovered address != expected address');
 	}
 

@@ -20,10 +20,10 @@
 		"noImplicitReturns": false,
 		"experimentalDecorators": true,
 		"target": "es6",
-		"types": ["node"],
+		"types": ["node", "mocha"],
 		"resolveJsonModule": true,
 		"sourceMap": true
 	},
 	"exclude": ["dist", "out", "node_modules"],
-	"include": ["**/*.ts", "**/*.tsx"]
+	"include": ["**/*.ts", "**/*.tsx", "./src/hardhat"]
 }
