@@ -265,17 +265,6 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
         bytes32 s
     ) external {
 
-        // require(block.timestamp <= deadline, "ERC20Permit: expired deadline");
-
-        // bytes32 structHash = keccak256(abi.encode(_PERMIT_TYPEHASH, owner, spender, value, _useNonce(owner), deadline));
-
-        // bytes32 hash = _hashTypedDataV4(structHash);
-
-        // address signer = ECDSA.recover(hash, v, r, s);
-        // require(signer == owner, "ERC20Permit: invalid signature");
-
-        // _approve(owner, spender, value);
-
         require(deadline >= block.timestamp, "BRAX: permit is expired");
 
         bytes memory data = abi.encode(
@@ -316,7 +305,6 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
         emit BRAXMinted(msg.sender, m_address, m_amount);
     }
 
-    // COVERED
     // Adds collateral addresses supported, such as wBTC and renBTC, must be ERC20 
     function addPool(address pool_address) public onlyByOwnerGovernanceOrController {
         require(pool_address != address(0), "Zero address detected");
@@ -328,8 +316,6 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
         emit PoolAdded(pool_address);
     }
 
-    // COVERED
-    // Remove a pool 
     function removePool(address pool_address) public onlyByOwnerGovernanceOrController {
         require(pool_address != address(0), "Zero address detected");
         require(brax_pools[pool_address] == true, "Address nonexistant");
