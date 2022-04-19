@@ -1,8 +1,9 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
-import { Contract, ContractFactory } from 'ethers';
+import { BigNumber, Contract, ContractFactory } from 'ethers';
 import { ethers, network } from 'hardhat';
 import ERC20 from '../abis/ERC20.json';
+import { getPermitSignature } from '../utils/EIP2612';
 
 describe('BRAX', function () {
 	let owner: SignerWithAddress;
@@ -10,8 +11,8 @@ describe('BRAX', function () {
 	let BRAXFactory: ContractFactory;
 	let governance_timelock: string;
 
-	const name: string = 'Frax';
-	const symbol: string = 'FRAX';
+	const name: string = 'Brax';
+	const symbol: string = 'BRAX';
 	const random_address = '0x853d955aCEf822Db058eb8505911ED77F175b99e';
 	const wbtc = '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599';
 	const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
@@ -365,6 +366,43 @@ describe('BRAX', function () {
 			await expect(brax.connect(badActor).pool_burn_from(random_address, '100000')).to.be.revertedWith(
 				'Only brax pools can call this function',
 			);
+		});
+	});
+
+	describe('ERC20Permit Testing', function () {
+		it('Should return the correct PERMIT_TYPEHASH', async function () {
+			const hash = await brax.PERMIT_TYPEHASH();
+			expect(hash).to.be.equal('0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9');
+		});
+
+		it('Should allow a permit to be posted', async function () {
+			const wallet = ethers.Wallet.createRandom().connect(ethers.getDefaultProvider());
+			const SECOND = 1000;
+			const fromAddress = wallet.address;
+			const expiry = BigNumber.from(Math.trunc((Date.now() + 120 * SECOND) / SECOND));
+			const spender = random_address;
+			const value = '100000000';
+			const config = {
+				nonce: await brax.nonces(wallet.address),
+				name: await brax.name(),
+				chainId: 31337,
+				version: '1',
+			};
+			const data = await getPermitSignature(wallet, brax, spender, value, expiry, config);
+			const approvalAmount = await brax.allowance(fromAddress, spender);
+			expect(approvalAmount).to.be.equal(0);
+			const permit = await brax.permit(
+				fromAddress,
+				spender,
+				value,
+				expiry,
+				data.typedData.v,
+				data.typedData.r,
+				data.typedData.s,
+			);
+			await permit.wait();
+			const afterApprovalAmount = await brax.allowance(fromAddress, spender);
+			expect(afterApprovalAmount).to.be.equal(value);
 		});
 	});
 });

@@ -34,6 +34,8 @@ import "../Oracle/UniswapPairOracle.sol";
 import "../Oracle/ChainlinkWBTCBTCPriceConsumer.sol";
 import "../Governance/AccessControl.sol";
 
+import "hardhat/console.sol";
+
 contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
     using SafeMath for uint256;
 
@@ -80,8 +82,7 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
     bool public collateral_ratio_paused = false;
 
     // EIP2612 ERC20Permit implementation
-    // keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
-    bytes32 public constant PERMIT_TYPEHASH = 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9;
+    bytes32 public constant PERMIT_TYPEHASH = keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
     mapping(address => uint) public nonces;
     bytes32 public DOMAIN_SEPARATOR;
 
@@ -122,15 +123,21 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
         refresh_cooldown = 3600; // Refresh cooldown period is set to 1 hour (3600 seconds) at genesis
         price_target = 100000000; // Collateral ratio will adjust according to the 1 BTC price target at genesis (e8)
         price_band = 500000; // Collateral ratio will not adjust if between 0.995 BTC and 1.005 BTC at genesis (e8)
+
         uint chainId;
         assembly {
             chainId := chainid()
         }
+        bytes32 hashedName = keccak256(bytes(name));
+        bytes32 hashedVersion = keccak256(bytes('1'));
+        bytes32 typeHash = keccak256(
+            "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+        );
         DOMAIN_SEPARATOR = keccak256(
             abi.encode(
-                keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)'),
-                keccak256(bytes(name)),
-                keccak256(bytes('1')),
+                typeHash,
+                hashedName,
+                hashedVersion,
                 chainId,
                 address(this)
             )
@@ -147,10 +154,10 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
         uint256 price_vs_wbtc = 0;
 
         if (choice == PriceChoice.BRAX) {
-            price_vs_wbtc = uint256(braxWBtcOracle.consult(wbtc_address, PRICE_PRECISION)); // How much FRAX if you put in PRICE_PRECISION WBTC
+            price_vs_wbtc = uint256(braxWBtcOracle.consult(wbtc_address, PRICE_PRECISION)); // How much BRAX if you put in PRICE_PRECISION WBTC
         }
         else if (choice == PriceChoice.BXS) {
-            price_vs_wbtc = uint256(bxsWBtcOracle.consult(wbtc_address, PRICE_PRECISION)); // How much FXS if you put in PRICE_PRECISION WBTC
+            price_vs_wbtc = uint256(bxsWBtcOracle.consult(wbtc_address, PRICE_PRECISION)); // How much BXS if you put in PRICE_PRECISION WBTC
         }
         else revert("INVALID PRICE CHOICE. Needs to be either BRAX or BXS");
 
@@ -201,7 +208,7 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
 
     /* ========== PUBLIC FUNCTIONS ========== */
     
-    /// @dev Update the collateral ratio based on the current price of FRAX
+    /// @dev Update the collateral ratio based on the current price of BRAX
     /// @notice last_call_time limits updates to once per hour to prevent multiple calls per expansion
     uint256 public last_call_time; // Last time the refreshCollateralRatio function was called
     function refreshCollateralRatio() public {
@@ -248,7 +255,7 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
      * @param r         r of the signature
      * @param s         s of the signature
      */
-    function _permit(
+    function permit(
         address owner,
         address spender,
         uint256 value,
@@ -256,7 +263,19 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) internal {
+    ) external {
+
+        // require(block.timestamp <= deadline, "ERC20Permit: expired deadline");
+
+        // bytes32 structHash = keccak256(abi.encode(_PERMIT_TYPEHASH, owner, spender, value, _useNonce(owner), deadline));
+
+        // bytes32 hash = _hashTypedDataV4(structHash);
+
+        // address signer = ECDSA.recover(hash, v, r, s);
+        // require(signer == owner, "ERC20Permit: invalid signature");
+
+        // _approve(owner, spender, value);
+
         require(deadline >= block.timestamp, "BRAX: permit is expired");
 
         bytes memory data = abi.encode(
@@ -264,7 +283,7 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
             owner,
             spender,
             value,
-            nonces[owner]++,
+            nonces[owner],
             deadline
         );
         bytes32 digest = keccak256(
@@ -278,6 +297,7 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
         require(recoveredAddress != address(0) && recoveredAddress == owner, 'BRAX: INVALID_SIGNATURE');
 
         _approve(owner, spender, value);
+        nonces[owner] += 1;
     }
 
     /* ========== RESTRICTED FUNCTIONS ========== */
