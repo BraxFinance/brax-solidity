@@ -100,6 +100,7 @@ describe('Pools', function () {
 		await approvePoolwBtc.wait();
 
 		// We need to modify the thresholds to prevent the transcation from reverting
+		// This is due to mocking the oracle and no reliable price coming through
 		const pt = await deployed_pool.setPriceThresholds(0, 10000000000);
 		await pt.wait();
 
