@@ -44,5 +44,5 @@ Console 2: Client
 
 ```
 cd ./src/hardhat
-npx hardhat test
+yarn test [optional: test/filename.ts]
 ```
