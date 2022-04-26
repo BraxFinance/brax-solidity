@@ -41,7 +41,6 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
 
     /* ========== STATE VARIABLES ========== */
     enum PriceChoice { BRAX, BXS }
-    // TODO: Address oracles (which oracles will we use, how to get BRAX and BXS pricing)
     ChainlinkWBTCBTCPriceConsumer private wbtc_btc_pricer;
     uint8 private wbtc_btc_pricer_decimals;
     UniswapPairOracle private braxWBtcOracle;
@@ -75,7 +74,7 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
     uint256 public refresh_cooldown; // Seconds to wait before being able to run refreshCollateralRatio() again
     uint256 public price_target; // The price of BRAX at which the collateral ratio will respond to; this value is only used for the collateral ratio mechanism and not for minting and redeeming which are hardcoded at 1 BTC
     uint256 public price_band; // The bound above and below the price target at which the refreshCollateralRatio() will not change the collateral ratio
-    uint256 public MAX_COLLATERAL_RATIO = 100000000;
+    uint256 public MAX_COLLATERAL_RATIO = 1e8;
 
     address public DEFAULT_ADMIN_ADDRESS;
     bytes32 public constant COLLATERAL_RATIO_PAUSER = keccak256("COLLATERAL_RATIO_PAUSER");
@@ -119,9 +118,9 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
         grantRole(COLLATERAL_RATIO_PAUSER, creator_address);
         grantRole(COLLATERAL_RATIO_PAUSER, timelock_address);
         brax_step = 250000; // 8 decimals of precision, equal to 0.25%
-        global_collateral_ratio = 100000000; // brax system starts off fully collateralized (8 decimals of precision)
+        global_collateral_ratio = 1e8; // brax system starts off fully collateralized (8 decimals of precision)
         refresh_cooldown = 3600; // Refresh cooldown period is set to 1 hour (3600 seconds) at genesis
-        price_target = 100000000; // Collateral ratio will adjust according to the 1 BTC price target at genesis (e8)
+        price_target = 1e8; // Collateral ratio will adjust according to the 1 BTC price target at genesis (e8)
         price_band = 500000; // Collateral ratio will not adjust if between 0.995 BTC and 1.005 BTC at genesis (e8)
 
         uint chainId;
@@ -146,29 +145,34 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
 
     /* ========== VIEWS ========== */
 
+    // COVERED
     /// @dev Retrieves oracle price for the provided PriceChoice enum
     /// @param choice Token to return pricing information for
     /// @return price X tokens required for 1 BTC
     function oracle_price(PriceChoice choice) internal view returns (uint256) {
-        uint256 __wbtc_btc_price = uint256(uint256(wbtc_btc_pricer.getLatestPrice()).mul(PRICE_PRECISION).div(uint256(10) ** wbtc_btc_pricer_decimals));
         uint256 price_vs_wbtc = 0;
+        uint256 pricer_decimals = 0;
 
         if (choice == PriceChoice.BRAX) {
             price_vs_wbtc = uint256(braxWBtcOracle.consult(wbtc_address, PRICE_PRECISION)); // How much BRAX if you put in PRICE_PRECISION WBTC
+            pricer_decimals = braxWBtcOracle.decimals();
         }
         else if (choice == PriceChoice.BXS) {
             price_vs_wbtc = uint256(bxsWBtcOracle.consult(wbtc_address, PRICE_PRECISION)); // How much BXS if you put in PRICE_PRECISION WBTC
+            pricer_decimals = bxsWBtcOracle.decimals();
         }
         else revert("INVALID PRICE CHOICE. Needs to be either BRAX or BXS");
 
-        return __wbtc_btc_price.mul(PRICE_PRECISION).div(price_vs_wbtc);
+        return uint256(wbtc_btc_pricer.getLatestPrice()).mul(uint256(10) ** pricer_decimals).div(price_vs_wbtc);
     }
 
+    // COVERED
     /// @return price X BRAX = 1 BTC
     function brax_price() public view returns (uint256) {
         return oracle_price(PriceChoice.BRAX);
     }
 
+    // COVERED
     /// @return price X BXS = 1 BTC
     function bxs_price()  public view returns (uint256) {
         return oracle_price(PriceChoice.BXS);
@@ -236,6 +240,7 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
         emit CollateralRatioRefreshed(global_collateral_ratio);
     }
 
+    // COVERED
     /**
      * @notice Nonces for permit
      * @param owner Token owner's address (Authorizer)
@@ -245,6 +250,7 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
         return nonces[owner];
     }
 
+    // COVERED
     /**
      * @notice Verify a signed approval permit and execute if valid
      * @param owner     Token owner's address (Authorizer)
@@ -264,7 +270,6 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
         bytes32 r,
         bytes32 s
     ) external {
-
         require(deadline >= block.timestamp, "BRAX: permit is expired");
 
         bytes memory data = abi.encode(

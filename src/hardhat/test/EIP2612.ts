@@ -107,7 +107,7 @@ describe('ERC20Permit Testing', function () {
 		const wallet = ethers.Wallet.createRandom().connect(ethers.getDefaultProvider('http://localhost:8545'));
 		const SECOND = 1000;
 		const fromAddress = wallet.address;
-		const expiry = BigNumber.from(Math.trunc((Date.now() - 120 * SECOND) / SECOND));
+		const expiry = BigNumber.from(Math.trunc((Date.now() - 100000 * SECOND) / SECOND));
 		const spender = random_address;
 		const value = '100000000';
 		const config = {

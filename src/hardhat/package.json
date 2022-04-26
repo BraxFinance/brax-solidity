@@ -1,12 +1,13 @@
 {
-	"name": "frax-contracts-dev",
+	"name": "brax-contracts-dev",
 	"version": "1.0.0",
-	"description": "Frax Finance smart contracts and testing",
+	"description": "Brax Finance smart contracts and testing",
 	"main": "src/index.js",
 	"scripts": {
 		"test": "npx hardhat test --network localhost",
 		"tsc": "tsc",
-		"prepare": "husky install"
+		"prepare": "husky install",
+		"node:local": "npx hardhat node --fork $(grep ETH_URL .env | cut -d '=' -f2 | sed 's/^.//;s/.$//')"
 	},
 	"lint-staged": {
 		"**/*": "prettier --write --ignore-unknown"
@@ -17,7 +18,7 @@
 		"stablecoin",
 		"defi"
 	],
-	"author": "Travis Moore (github.com/FortisFortuna) & Jason Huan <sino@ucla.edu> (github.com/jasonhuan)",
+	"author": "Travis Moore (github.com/FortisFortuna) & Jason Huan <sino@ucla.edu> (github.com/jasonhuan) & mitche50",
 	"license": "ISC",
 	"dependencies": {
 		"@chainlink/contracts": "0.2.2",

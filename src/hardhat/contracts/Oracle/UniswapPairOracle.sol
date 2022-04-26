@@ -30,6 +30,7 @@ contract UniswapPairOracle is Owned {
     FixedPoint.uq112x112 public price0Average;
     FixedPoint.uq112x112 public price1Average;
 
+    uint8 public decimals = 18;
 
     modifier onlyByOwnGov() {
         require(msg.sender == owner || msg.sender == timelock_address, "You are not an owner or the governance timelock");
