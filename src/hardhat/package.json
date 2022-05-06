@@ -7,7 +7,7 @@
 		"test": "npx hardhat test --network localhost",
 		"tsc": "tsc",
 		"prepare": "husky install",
-		"node:local": "npx hardhat node --fork $(grep ETH_URL .env | cut -d '=' -f2 | sed 's/^.//;s/.$//')"
+		"node:fork": "npx hardhat node --fork $(grep ETH_URL .env | cut -d '=' -f2 | sed 's/^.//;s/.$//')"
 	},
 	"lint-staged": {
 		"**/*": "prettier --write --ignore-unknown"

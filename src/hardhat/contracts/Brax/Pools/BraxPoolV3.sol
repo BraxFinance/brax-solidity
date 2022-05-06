@@ -217,7 +217,10 @@ contract BraxPoolV3 is Owned {
 
     /* ========== VIEWS ========== */
 
-    // Helpful for UIs
+    /**
+     * @notice Return the collateral information for a provided address
+     * @param collat_address address of a type of collateral, e.g. wBTC or renBTC
+     */
     function collateral_information(address collat_address) external view returns (CollateralInformation memory return_data){
         require(enabled_collaterals[collat_address], "Invalid collateral");
 

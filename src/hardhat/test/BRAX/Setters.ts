@@ -84,6 +84,10 @@ describe('Setters', function () {
 		expect(new_bxs).to.be.equal(random_address);
 	});
 
+	it('Should not allow the zero address to be set for BXS', async function () {
+		await expect(brax.setBXSAddress(ZERO_ADDRESS)).to.be.revertedWith('Zero address detected');
+	});
+
 	// Gotcha - the wbtc/btc oracle needs to be wrapped in the price consumer aggregator
 	it('Should allow the correct address to set the wBTC:BTC Oracle', async function () {
 		const OracleFactory = await ethers.getContractFactory('ChainlinkWBTCBTCPriceConsumer');
@@ -99,6 +103,10 @@ describe('Setters', function () {
 		expect(new_oracle).to.be.equal(deployed_oracle.address);
 	});
 
+	it('Should not allow the zero address to be set for the wBTC:BTC Oracle', async function () {
+		await expect(brax.setWBTCBTCOracle(ZERO_ADDRESS)).to.be.revertedWith('Zero address detected');
+	});
+
 	it('Should allow the correct address to set the timelock address', async function () {
 		const current_timelock = await brax.timelock_address();
 		const timelock = await brax.setTimelock(wbtc);
@@ -109,6 +117,10 @@ describe('Setters', function () {
 		expect(new_timelock).to.be.equal(wbtc);
 	});
 
+	it('Should not allow the zero address to be set for the timelock address', async function () {
+		await expect(brax.setTimelock(ZERO_ADDRESS)).to.be.revertedWith('Zero address detected');
+	});
+
 	it('Should allow the correct address to set the controller address', async function () {
 		const current_controller = await brax.controller_address();
 		const controller = await brax.setController(wbtc);
@@ -117,6 +129,10 @@ describe('Setters', function () {
 
 		expect(current_controller).to.not.equal(new_controller);
 		expect(new_controller).to.be.equal(wbtc);
+	});
+
+	it('Should not allow the zero address to be set for the controller address', async function () {
+		await expect(brax.setController(ZERO_ADDRESS)).to.be.revertedWith('Zero address detected');
 	});
 
 	it('Should allow the correct address to set the price band', async function () {
@@ -139,6 +155,10 @@ describe('Setters', function () {
 		expect(new_oracle).to.be.equal(random_address);
 	});
 
+	it('Should not allow the zero address to be set for the BRAX wBTC Oracle', async function () {
+		await expect(brax.setBRAXWBtcOracle(ZERO_ADDRESS, wbtc)).to.be.revertedWith('Zero address detected');
+	});
+
 	it('Should allow the correct address to set the BXS wBTC Oracle', async function () {
 		const current_oracle = await brax.bxs_wbtc_oracle_address();
 		const oracle = await brax.setBXSWBtcOracle(random_address, wbtc);
@@ -147,6 +167,10 @@ describe('Setters', function () {
 
 		expect(current_oracle).to.not.equal(new_oracle);
 		expect(new_oracle).to.be.equal(random_address);
+	});
+
+	it('Should not allow the zero address to be set for the BXS wBTC Oracle', async function () {
+		await expect(brax.setBXSWBtcOracle(ZERO_ADDRESS, wbtc)).to.be.revertedWith('Zero address detected');
 	});
 
 	it('Should allow the correct address to toggle the collateral ratio', async function () {
@@ -185,6 +209,9 @@ describe('Setters', function () {
 			'Not the owner, controller, or the governance timelock',
 		);
 		await expect(brax.connect(badActor).setTimelock(random_address)).to.be.revertedWith(
+			'Not the owner, controller, or the governance timelock',
+		);
+		await expect(brax.connect(badActor).setController(random_address)).to.be.revertedWith(
 			'Not the owner, controller, or the governance timelock',
 		);
 		await expect(brax.connect(badActor).setPriceBand(5000)).to.be.revertedWith(

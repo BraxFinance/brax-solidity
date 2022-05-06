@@ -2,7 +2,7 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { Contract, ContractFactory } from 'ethers';
 import { ethers, network } from 'hardhat';
-import ERC20 from '../abis/ERC20.json';
+import ERC20 from '../../abis/ERC20.json';
 
 describe('Pools', function () {
 	let owner: SignerWithAddress;
@@ -46,11 +46,91 @@ describe('Pools', function () {
 
 		const new_pool = await brax.brax_pools_array(0);
 		expect(new_pool).to.be.equal(deployed_pool.address);
+		const new_pool_mapping = await brax.brax_pools(deployed_pool.address);
+		expect(new_pool_mapping).to.be.equal(true);
 
 		const remove_pool = await brax.removePool(deployed_pool.address);
 		await remove_pool.wait();
 		const removed_pool = await brax.brax_pools_array(0);
 		expect(removed_pool).to.be.equal(ZERO_ADDRESS);
+		const removed_pool_mapping = await brax.brax_pools(deployed_pool.address);
+		expect(removed_pool_mapping).to.be.equal(false);
+	});
+
+	it('Should prevent you from adding the same pool twice', async function () {
+		const PoolFactory = await ethers.getContractFactory('BraxPoolV3');
+		const deployed_pool = await PoolFactory.deploy(
+			owner.address,
+			owner.address,
+			owner.address,
+			[wbtc],
+			['2100000000000000'],
+			[3000, 5000, 4500, 4500],
+			brax.address,
+			random_address,
+		);
+		await deployed_pool.deployed();
+
+		await expect(brax.brax_pools_array(0)).to.be.reverted;
+
+		const add_pool = await brax.addPool(deployed_pool.address);
+		await add_pool.wait();
+
+		await expect(brax.addPool(deployed_pool.address)).to.be.revertedWith('Address already exists');
+	});
+
+	it('Should prevent you from removing a pool that does not exist', async function () {
+		await expect(brax.removePool(random_address)).to.be.revertedWith('Address nonexistant');
+	});
+
+	it('Should not allow a non-address to be added or', async function () {
+		try {
+			const poolAdd = await brax.addPool('0xabc');
+			await poolAdd.wait();
+			throw new Error('Did not revert');
+		} catch (err) {
+			expect(err.message).to.include('invalid address');
+		}
+
+		try {
+			const poolAdd = await brax.removePool('0xabc');
+			await poolAdd.wait();
+			throw new Error('Did not revert');
+		} catch (err) {
+			expect(err.message).to.include('invalid address');
+		}
+	});
+
+	it('Should prevent unauthorized addresses from adding and removing pools', async function () {
+		const PoolFactory = await ethers.getContractFactory('BraxPoolV3');
+		const deployed_pool = await PoolFactory.deploy(
+			owner.address,
+			owner.address,
+			owner.address,
+			[wbtc],
+			['2100000000000000'],
+			[3000, 5000, 4500, 4500],
+			brax.address,
+			random_address,
+		);
+		await deployed_pool.deployed();
+
+		const [_, badActor] = await ethers.getSigners();
+		await expect(brax.connect(badActor).addPool(deployed_pool.address)).to.be.revertedWith(
+			'Not the owner, controller, or the governance timelock',
+		);
+
+		const add_pool = await brax.addPool(deployed_pool.address);
+		await add_pool.wait();
+
+		await expect(brax.connect(badActor).removePool(deployed_pool.address)).to.be.revertedWith(
+			'Not the owner, controller, or the governance timelock',
+		);
+	});
+
+	it('Should prevent a 0 address from being added or removed', async function () {
+		await expect(brax.addPool(ZERO_ADDRESS)).to.be.revertedWith('Zero address detected');
+		await expect(brax.removePool(ZERO_ADDRESS)).to.be.revertedWith('Zero address detected');
 	});
 
 	it('Should allow a pool to mint BRAX', async function () {
@@ -129,7 +209,7 @@ describe('Pools', function () {
 		expect(parseInt(afterBurnBalance)).to.be.equal(parseInt(afterMintBalance.sub('1000000')));
 	});
 
-	it("Shouldn't allow non-pools to perform pool only actions", async function () {
+	it('Should prevent non-pools from performing pool only actions', async function () {
 		const [_, badActor] = await ethers.getSigners();
 
 		await expect(brax.connect(badActor).pool_mint(badActor.address, '100000')).to.be.revertedWith(

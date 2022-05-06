@@ -2,7 +2,7 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { BigNumber, Contract, ContractFactory } from 'ethers';
 import { ethers } from 'hardhat';
-import { getPermitSignature } from '../utils/EIP2612';
+import { getPermitSignature } from '../../utils/EIP2612';
 
 describe('ERC20Permit Testing', function () {
 	let owner: SignerWithAddress;
@@ -79,6 +79,69 @@ describe('ERC20Permit Testing', function () {
 		).to.be.revertedWith('BRAX: INVALID_SIGNATURE');
 	});
 
+	it('Should revert if V is incorrect', async function () {
+		const wallet = ethers.Wallet.createRandom().connect(ethers.getDefaultProvider('http://localhost:8545'));
+		const SECOND = 1000;
+		const fromAddress = wallet.address;
+		const expiry = BigNumber.from(Math.trunc((Date.now() + 120 * SECOND) / SECOND));
+		const spender = random_address;
+		const value = '100000000';
+		const config = {
+			nonce: await brax.nonces(wallet.address),
+			name: await brax.name(),
+			chainId: 31337,
+			version: '1',
+		};
+		const data = await getPermitSignature(wallet, brax, spender, value, expiry, undefined, config);
+		const approvalAmount = await brax.allowance(fromAddress, spender);
+		expect(approvalAmount).to.be.equal(0);
+		await expect(
+			brax.permit(fromAddress, spender, value, expiry, data.typedData.v + 1, data.typedData.r, data.typedData.s),
+		).to.be.revertedWith('BRAX: INVALID_SIGNATURE');
+	});
+
+	it('Should revert if R is incorrect', async function () {
+		const wallet = ethers.Wallet.createRandom().connect(ethers.getDefaultProvider('http://localhost:8545'));
+		const SECOND = 1000;
+		const fromAddress = wallet.address;
+		const expiry = BigNumber.from(Math.trunc((Date.now() + 120 * SECOND) / SECOND));
+		const spender = random_address;
+		const value = '100000000';
+		const config = {
+			nonce: await brax.nonces(wallet.address),
+			name: await brax.name(),
+			chainId: 31337,
+			version: '1',
+		};
+		const data = await getPermitSignature(wallet, brax, spender, value, expiry, undefined, config);
+		const approvalAmount = await brax.allowance(fromAddress, spender);
+		expect(approvalAmount).to.be.equal(0);
+		await expect(
+			brax.permit(fromAddress, spender, value, expiry, data.typedData.v, data.typedData.s, data.typedData.s),
+		).to.be.revertedWith('BRAX: INVALID_SIGNATURE');
+	});
+
+	it('Should revert if S is incorrect', async function () {
+		const wallet = ethers.Wallet.createRandom().connect(ethers.getDefaultProvider('http://localhost:8545'));
+		const SECOND = 1000;
+		const fromAddress = wallet.address;
+		const expiry = BigNumber.from(Math.trunc((Date.now() + 120 * SECOND) / SECOND));
+		const spender = random_address;
+		const value = '100000000';
+		const config = {
+			nonce: await brax.nonces(wallet.address),
+			name: await brax.name(),
+			chainId: 31337,
+			version: '1',
+		};
+		const data = await getPermitSignature(wallet, brax, spender, value, expiry, undefined, config);
+		const approvalAmount = await brax.allowance(fromAddress, spender);
+		expect(approvalAmount).to.be.equal(0);
+		await expect(
+			brax.permit(fromAddress, spender, value, expiry, data.typedData.v, data.typedData.r, data.typedData.r),
+		).to.be.revertedWith('BRAX: INVALID_SIGNATURE');
+	});
+
 	it('Should revert if signature is for non-owned account', async function () {
 		const wallet = ethers.Wallet.createRandom().connect(ethers.getDefaultProvider('http://localhost:8545'));
 		const secondWallet = ethers.Wallet.createRandom().connect(ethers.getDefaultProvider('http://localhost:8545'));
@@ -100,6 +163,66 @@ describe('ERC20Permit Testing', function () {
 			brax
 				.connect(wallet)
 				.permit(fromAddress, spender, value, expiry, data.typedData.v, data.typedData.r, data.typedData.s),
+		).to.be.revertedWith('BRAX: INVALID_SIGNATURE');
+	});
+
+	it('Should revert if signature is for less than the value requested', async function () {
+		const wallet = ethers.Wallet.createRandom().connect(ethers.getDefaultProvider('http://localhost:8545'));
+		const SECOND = 1000;
+		const fromAddress = wallet.address;
+		const expiry = BigNumber.from(Math.trunc((Date.now() + 120 * SECOND) / SECOND));
+		const spender = random_address;
+		const value = '100000000';
+		const incorrectValue = '100000001';
+		const config = {
+			nonce: await brax.nonces(wallet.address),
+			name: await brax.name(),
+			chainId: 31337,
+			version: '1',
+		};
+		const data = await getPermitSignature(wallet, brax, spender, value, expiry, undefined, config);
+		const approvalAmount = await brax.allowance(fromAddress, spender);
+		expect(approvalAmount).to.be.equal(0);
+		await expect(
+			brax.permit(
+				fromAddress,
+				spender,
+				incorrectValue,
+				expiry,
+				data.typedData.v,
+				data.typedData.r,
+				data.typedData.s,
+			),
+		).to.be.revertedWith('BRAX: INVALID_SIGNATURE');
+	});
+
+	it('Should revert if spender is incorrect', async function () {
+		const wallet = ethers.Wallet.createRandom().connect(ethers.getDefaultProvider('http://localhost:8545'));
+		const SECOND = 1000;
+		const fromAddress = wallet.address;
+		const expiry = BigNumber.from(Math.trunc((Date.now() + 120 * SECOND) / SECOND));
+		const spender = random_address;
+		const invalidSpender = wallet.address;
+		const value = '100000000';
+		const config = {
+			nonce: await brax.nonces(wallet.address),
+			name: await brax.name(),
+			chainId: 31337,
+			version: '1',
+		};
+		const data = await getPermitSignature(wallet, brax, spender, value, expiry, undefined, config);
+		const approvalAmount = await brax.allowance(fromAddress, spender);
+		expect(approvalAmount).to.be.equal(0);
+		await expect(
+			brax.permit(
+				fromAddress,
+				invalidSpender,
+				value,
+				expiry,
+				data.typedData.v,
+				data.typedData.r,
+				data.typedData.s,
+			),
 		).to.be.revertedWith('BRAX: INVALID_SIGNATURE');
 	});
 
