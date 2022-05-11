@@ -4,6 +4,7 @@ import { HardhatUserConfig, task } from 'hardhat/config';
 import '@nomiclabs/hardhat-etherscan';
 import '@nomiclabs/hardhat-waffle';
 import '@nomiclabs/hardhat-vyper';
+import '@primitivefi/hardhat-dodoc';
 
 dotenv.config();
 
@@ -23,6 +24,11 @@ task('accounts', 'Prints the list of accounts', async (taskArgs, hre) => {
 const config: HardhatUserConfig = {
 	vyper: {
 		version: '0.3.1',
+	},
+	dodoc: {
+		include: ['contracts/Brax', 'contracts/BXS'],
+		exclude: ['I*, contracts/Brax/BraxAMOMinter.sol'],
+		// More options...
 	},
 	networks: {
 		mainnet: {

@@ -83,7 +83,7 @@ describe('Pools', function () {
 		await expect(brax.removePool(random_address)).to.be.revertedWith('Address nonexistant');
 	});
 
-	it('Should not allow a non-address to be added or', async function () {
+	it('Should not allow a non-address to be added or removed', async function () {
 		try {
 			const poolAdd = await brax.addPool('0xabc');
 			await poolAdd.wait();

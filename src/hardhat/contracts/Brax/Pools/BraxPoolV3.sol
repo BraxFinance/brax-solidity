@@ -84,7 +84,7 @@ contract BraxPoolV3 is Owned {
     
     // Buyback related
     mapping(uint256 => uint256) public bbkHourlyCum; // Epoch hour ->  Collat out in that hour (E18)
-    uint256 public bbkMaxColE18OutPerHour = 1000e18;
+    uint256 public bbkMaxColE18OutPerHour = 1e18;
 
     // Recollat related
     mapping(uint256 => uint256) public rctHourlyCum; // Epoch hour ->  FXS out in that hour
@@ -215,11 +215,35 @@ contract BraxPoolV3 is Owned {
         uint256 recollat_fee;
     }
 
+    /* ========== INTERNAL FUNCTIONS ========== */
+
+    /// @dev helper function to help limit volatility in calculations
+    function comboCalcBbkRct(uint256 cur, uint256 max, uint256 theo) internal pure returns (uint256) {
+        if (cur >= max) {
+            // If the hourly limit has already been reached, return 0;
+            return 0;
+        }
+        else {
+            // Get the available amount
+            uint256 available = max.sub(cur);
+
+            if (theo >= available) {
+                // If the the theoretical is more than the available, return the available
+                return available;
+            }
+            else {
+                // Otherwise, return the theoretical amount
+                return theo;
+            }
+        } 
+    }
+
     /* ========== VIEWS ========== */
 
     /**
      * @notice Return the collateral information for a provided address
      * @param collat_address address of a type of collateral, e.g. wBTC or renBTC
+     * @return return_data struct containing all data regarding the provided collateral address
      */
     function collateral_information(address collat_address) external view returns (CollateralInformation memory return_data){
         require(enabled_collaterals[collat_address], "Invalid collateral");
@@ -247,10 +271,18 @@ contract BraxPoolV3 is Owned {
         );
     }
 
+    /**
+     * @notice Returns a list of all collateral addresses
+     * @return addresses list of all collateral addresses
+     */
     function allCollaterals() external view returns (address[] memory) {
         return collateral_addresses;
     }
 
+    /**
+     * @notice Return current price from chainlink feed for BRAX
+     * @return price Current price of BRAX chainlink feed
+     */
     function getBRAXPrice() public view returns (uint256) {
         (uint80 roundID, int price, , uint256 updatedAt, uint80 answeredInRound) = priceFeedBRAXBTC.latestRoundData();
         require(price >= 0 && updatedAt!= 0 && answeredInRound >= roundID, "Invalid chainlink price");
@@ -258,6 +290,10 @@ contract BraxPoolV3 is Owned {
         return uint256(price).mul(PRICE_PRECISION).div(10 ** chainlink_brax_btc_decimals);
     }
 
+    /**
+     * @notice Return current price from chainlink feed for BXS
+     * @return price Current price of BXS chainlink feed
+     */
     function getBXSPrice() public view returns (uint256) {
         (uint80 roundID, int price, , uint256 updatedAt, uint80 answeredInRound) = priceFeedBXSBTC.latestRoundData();
         require(price >= 0 && updatedAt!= 0 && answeredInRound >= roundID, "Invalid chainlink price");
@@ -265,50 +301,45 @@ contract BraxPoolV3 is Owned {
         return uint256(price).mul(PRICE_PRECISION).div(10 ** chainlink_bxs_btc_decimals);
     }
 
-    // Returns the BRAX value in collateral tokens
+    /**
+     * @notice Return price of BRAX in the provided collateral token
+     * @dev Note: pricing is returned in collateral precision.  For example,
+     * @dev getting price for wBTC would be in 8 decimals
+     * @param col_idx index of collateral token (e.g. 0 for wBTC, 1 for renBTC)
+     * @param brax_amount amount of BRAX to get the equivalent price for
+     * @return price price of BRAX in collateral (decimals are equivalent to collateral, not BRAX)
+     */
     function getBRAXInCollateral(uint256 col_idx, uint256 brax_amount) public view returns (uint256) {
-        // 100000000 * 100000000 / 10^10 / 100000000
         return brax_amount.mul(PRICE_PRECISION).div(10 ** missing_decimals[col_idx]).div(collateral_prices[col_idx]);
     }
 
-    // Used by some functions.
+    /**
+     * @notice Return amount of collateral balance not waiting to be redeemed
+     * @param col_idx index of collateral token (e.g. 0 for wBTC, 1 for renBTC)
+     * @return amount amount of collateral not waiting to be redeemed (E18)
+     */
     function freeCollatBalance(uint256 col_idx) public view returns (uint256) {
         return ERC20(collateral_addresses[col_idx]).balanceOf(address(this)).sub(unclaimedPoolCollateral[col_idx]);
     }
 
-    // Returns btc value of collateral held in this Brax pool, in E18
+    /**
+     * @notice Returns BTC value of collateral held in this Brax pool, in E18
+     * @return balance_tally total BTC value in pool (E18)
+     */
     function collatBtcBalance() external view returns (uint256 balance_tally) {
         balance_tally = 0;
 
-        // Test 1
         for (uint256 i = 0; i < collateral_addresses.length; i++){ 
             balance_tally += freeCollatBalance(i).mul(10 ** missing_decimals[i]).mul(collateral_prices[i]).div(PRICE_PRECISION);
         }
 
     }
 
-    function comboCalcBbkRct(uint256 cur, uint256 max, uint256 theo) internal pure returns (uint256) {
-        if (cur >= max) {
-            // If the hourly limit has already been reached, return 0;
-            return 0;
-        }
-        else {
-            // Get the available amount
-            uint256 available = max.sub(cur);
-
-            if (theo >= available) {
-                // If the the theoretical is more than the available, return the available
-                return available;
-            }
-            else {
-                // Otherwise, return the theoretical amount
-                return theo;
-            }
-        } 
-    }
-
-    // Returns the value of excess collateral (in E18) held globally, compared to what is needed to maintain the global collateral ratio
-    // Also has throttling to avoid dumps during large price movements
+    /**
+     * @notice Returns the value of excess collateral (E18) held globally, compared to what is needed to maintain the global collateral ratio
+     * @dev comboCalcBbkRct() is used to throttle buybacks to avoid dumps during periods of large volatility
+     * @return total excess collateral in the system (E18)
+     */
     function buybackAvailableCollat() public view returns (uint256) {
         uint256 total_supply = BRAX.totalSupply();
         uint256 global_collateral_ratio = BRAX.global_collateral_ratio();
@@ -330,7 +361,10 @@ contract BraxPoolV3 is Owned {
         else return 0;
     }
 
-    // Returns the missing amount of collateral (in E18) needed to maintain the collateral ratio
+    /**
+     * @notice Returns the missing amount of collateral (in E18) needed to maintain the collateral ratio
+     * @return balance_tally total BTC value in pool in E18
+     */
     function recollatTheoColAvailableE18() public view returns (uint256) {
         uint256 brax_total_supply = BRAX.totalSupply();
         uint256 effective_collateral_ratio = BRAX.globalCollateralValue().mul(PRICE_PRECISION).div(brax_total_supply); // Returns it in 1e8
@@ -346,8 +380,11 @@ contract BraxPoolV3 is Owned {
         }
     }
 
-    // Returns the value of BXS available to be used for recollats
-    // Also has throttling to avoid dumps during large price movements
+    /**
+     * @notice Returns the value of BXS available to be used for recollats
+     * @dev utilizes comboCalcBbkRct to throttle for periods of high volatility
+     * @return total value of BXS available for recollateralization
+     */
     function recollatAvailableBxs() public view returns (uint256) {
         uint256 bxs_price = getBXSPrice();
 
@@ -364,13 +401,26 @@ contract BraxPoolV3 is Owned {
         return comboCalcBbkRct(current_hr_rct, rctMaxFxsOutPerHour, bxs_theo_out);
     }
 
-    // Returns the current epoch hour
+    /// @return hour current epoch hour
     function curEpochHr() public view returns (uint256) {
         return (block.timestamp / 3600); // Truncation desired
     }
 
     /* ========== PUBLIC FUNCTIONS ========== */
 
+    /**
+     * @notice Mint BRAX via collateral / BXS combination
+     * @param col_idx integer value of the collateral index
+     * @param brax_amt Amount of BRAX to mint
+     * @param brax_out_min Minimum amount of BRAX to accept
+     * @param max_collat_in Maximum amount of collateral to use for minting
+     * @param max_bxs_in Maximum amount of BXS to use for minting
+     * @param one_to_one_override Boolean flag to indicate using 1:1 BRAX:Collateral for 
+     *   minting, ignoring current global collateral ratio of BRAX
+     * @return total_brax_mint Amount of BRAX minted
+     * @return collat_needed Amount of collateral used
+     * @return bxs_needed Amount of BXS used
+     */
      function mintBrax(
         uint256 col_idx, 
         uint256 brax_amt,
@@ -584,6 +634,8 @@ contract BraxPoolV3 is Owned {
         rctHourlyCum[curEpochHr()] += bxs_out;
     }
 
+    /* ========== RESTRICTED FUNCTIONS, MINTER ONLY ========== */
+
     // Bypasses the gassy mint->redeem cycle for AMOs to borrow collateral
     function amoMinterBorrow(uint256 collateral_amount) external onlyAMOMinters {
         // Checks the col_idx of the minter as an additional safety check
@@ -613,7 +665,8 @@ contract BraxPoolV3 is Owned {
 
     /* ========== RESTRICTED FUNCTIONS, GOVERNANCE ONLY ========== */
 
-    // Add an AMO Minter
+    /// @notice Add an AMO Minter Address
+    /// @param amo_minter_addr Address of the new AMO minter
     function addAMOMinter(address amo_minter_addr) external onlyByOwnGov {
         require(amo_minter_addr != address(0), "Zero address detected");
 
@@ -626,13 +679,19 @@ contract BraxPoolV3 is Owned {
         emit AMOMinterAdded(amo_minter_addr);
     }
 
-    // Remove an AMO Minter 
+    /// @notice Remove an AMO Minter Address
+    /// @param amo_minter_addr Address of the AMO minter to remove
     function removeAMOMinter(address amo_minter_addr) external onlyByOwnGov {
         amo_minter_addresses[amo_minter_addr] = false;
         
         emit AMOMinterRemoved(amo_minter_addr);
     }
 
+    /** 
+     * @notice Set the collateral price for a specific collateral
+     * @param col_idx Index of the collateral
+     * @param _new_price New price of the collateral
+     */
     function setCollateralPrice(uint256 col_idx, uint256 _new_price) external onlyByOwnGov {
         // Only to be used for collateral without chainlink price feed
         // Immediate priorty to get a price feed in place
@@ -641,6 +700,10 @@ contract BraxPoolV3 is Owned {
         emit CollateralPriceSet(col_idx, _new_price);
     }
 
+    /**
+     * @notice Toggles collateral for use in the pool
+     * @param col_idx Index of the collateral to be enabled
+     */
     function toggleCollateral(uint256 col_idx) external onlyByOwnGov {
         address col_address = collateral_addresses[col_idx];
         enabled_collaterals[col_address] = !enabled_collaterals[col_address];
@@ -648,12 +711,25 @@ contract BraxPoolV3 is Owned {
         emit CollateralToggled(col_idx, enabled_collaterals[col_address]);
     }
 
+    /**
+     * @notice Set the ceiling of collateral allowed for minting
+     * @param col_idx Index of the collateral to be modified
+     * @param new_ceiling New ceiling amount of collateral
+     */
     function setPoolCeiling(uint256 col_idx, uint256 new_ceiling) external onlyByOwnGov {
         pool_ceilings[col_idx] = new_ceiling;
 
         emit PoolCeilingSet(col_idx, new_ceiling);
     }
 
+    /**
+     * @notice Set the fees of collateral allowed for minting
+     * @param col_idx Index of the collateral to be modified
+     * @param new_mint_fee New mint fee for collateral
+     * @param new_redeem_fee New redemption fee for collateral
+     * @param new_buyback_fee New buyback fee for collateral
+     * @param new_recollat_fee New recollateralization fee for collateral
+     */
     function setFees(uint256 col_idx, uint256 new_mint_fee, uint256 new_redeem_fee, uint256 new_buyback_fee, uint256 new_recollat_fee) external onlyByOwnGov {
         minting_fee[col_idx] = new_mint_fee;
         redemption_fee[col_idx] = new_redeem_fee;

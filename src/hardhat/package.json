@@ -87,6 +87,7 @@
 		"husky": "^7.0.4",
 		"lint-staged": "^12.3.7",
 		"prettier": "2.6.2",
+		"soldocgen": "^0.0.3",
 		"web3": "^1.7.0"
 	}
 }

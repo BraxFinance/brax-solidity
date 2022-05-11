@@ -180,8 +180,13 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
      * @notice Return all info regarding BRAX
      * @dev This is needed to avoid costly repeat calls to different getter functions
      * @dev It is cheaper gas-wise to just dump everything and only use some of the info
-     * @return info Tuple including responses from brax_price, bxs_price, totalSupply(),
-     * @return info global_collateral_ratio, globalCollateralValue(), minting_fee, redemption_fee
+     * @return braxPrice Oracle price of BRAX
+     * @return bxsPrice Oracle price of BXS
+     * @return totalSupply of BRAX
+     * @return global_collateral_ratio Current global collateral ratio of BRAX
+     * @return globalCollateralValue Current free value in the BRAX system
+     * @return minting_fee Fee to mint BRAX
+     * @return redemption_fee Feed to redeem BRAX
      */
     function brax_info() public view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256) {
         return (
@@ -197,7 +202,7 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
 
     /**
      * @notice Iterate through all brax pools and calculate all value of collateral in all pools globally denominated in BTC
-     * @return balance Balance of all pools denominated in BTC
+     * @return balance Balance of all pools denominated in BTC (e18)
      */
     function globalCollateralValue() public view returns (uint256) {
         uint256 total_collateral_value_d18 = 0; 
