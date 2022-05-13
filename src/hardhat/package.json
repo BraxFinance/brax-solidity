@@ -69,6 +69,7 @@
 		"ws": "^8.4.2"
 	},
 	"devDependencies": {
+		"@mitche50/soldocgen": "^0.0.8",
 		"@nomiclabs/hardhat-ethers": "^2.0.5",
 		"@nomiclabs/hardhat-etherscan": "^3.0.0",
 		"@nomiclabs/hardhat-truffle5": "^2.0.3",

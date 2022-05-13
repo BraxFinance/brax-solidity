@@ -969,6 +969,20 @@
   resolved "https://registry.yarnpkg.com/@metamask/safe-event-emitter/-/safe-event-emitter-2.0.0.tgz#af577b477c683fad17c619a78208cede06f9605c"
   integrity sha512-/kSXhY692qiV1MXu6EeOZvg5nECLclxNXcKCxJ3cXQgYuRymRHpdx/t7JXfsK+JLjwA1e1c1/SBrlQYpusC29Q==
 
+"@mitche50/soldocgen@^0.0.8":
+  version "0.0.8"
+  resolved "https://registry.yarnpkg.com/@mitche50/soldocgen/-/soldocgen-0.0.8.tgz#87fe4dff14a2b1cb11c26e5bb4a435b015d9cae3"
+  integrity sha512-0X0/alS8bfLlfsbfI2U+7DmBTBJiilEyQM5Kryg62KFFUoy+k1+yrHq7+7bJertL3DNdmrJwLEmIKCQw+E2prg==
+  dependencies:
+    "@mitche50/solidity-parser-antlr" "0.4.11-alpha.0"
+    directory-tree "2.2.4"
+    meow "7.0.1"
+
+"@mitche50/solidity-parser-antlr@0.4.11-alpha.0":
+  version "0.4.11-alpha.0"
+  resolved "https://registry.yarnpkg.com/@mitche50/solidity-parser-antlr/-/solidity-parser-antlr-0.4.11-alpha.0.tgz#bbcd433f7b0eba1debc2974a2bc0ad8445039c1e"
+  integrity sha512-U1zT3YAe5JKMTau2HtHGkPn71HwuNszJZuCJl3sF70HBw2JEuVL4dAicpZ0p5iWyYjTjI7Rk+RVZAmozlyqY8g==
+
 "@multiformats/base-x@^4.0.1":
   version "4.0.1"
   resolved "https://registry.yarnpkg.com/@multiformats/base-x/-/base-x-4.0.1.tgz#95ff0fa58711789d53aefb2590a8b7a4e715d121"

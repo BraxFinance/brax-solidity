@@ -1,0 +1,9 @@
+{
+  "name": "brax-solidity",
+  "version": "0.0.1",
+  "description": "Brax Finance smart contracts and testing",
+  "main": "index.js",
+  "repository": "https://github.com/BraxFinance/brax-solidity.git",
+  "author": "mitche50 <mitche50@gmail.com>",
+  "license": "MIT"
+}

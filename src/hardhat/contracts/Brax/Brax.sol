@@ -34,8 +34,6 @@ import "../Oracle/UniswapPairOracle.sol";
 import "../Oracle/ChainlinkWBTCBTCPriceConsumer.sol";
 import "../Governance/AccessControl.sol";
 
-import "hardhat/console.sol";
-
 contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
     using SafeMath for uint256;
 
@@ -149,7 +147,7 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
      * @param choice Token to return pricing information for
      * @return price X tokens required for 1 BTC
      */
-    function oracle_price(PriceChoice choice) internal view returns (uint256) {
+    function oracle_price(PriceChoice choice) internal view returns (uint256 price) {
         uint256 price_vs_wbtc = 0;
         uint256 pricer_decimals = 0;
 
@@ -167,12 +165,12 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
     }
 
     /// @return price X BRAX = 1 BTC
-    function brax_price() public view returns (uint256) {
+    function brax_price() public view returns (uint256 price) {
         return oracle_price(PriceChoice.BRAX);
     }
 
     /// @return price X BXS = 1 BTC
-    function bxs_price()  public view returns (uint256) {
+    function bxs_price()  public view returns (uint256 price) {
         return oracle_price(PriceChoice.BXS);
     }
 
@@ -180,15 +178,15 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
      * @notice Return all info regarding BRAX
      * @dev This is needed to avoid costly repeat calls to different getter functions
      * @dev It is cheaper gas-wise to just dump everything and only use some of the info
-     * @return braxPrice Oracle price of BRAX
-     * @return bxsPrice Oracle price of BXS
-     * @return totalSupply of BRAX
-     * @return global_collateral_ratio Current global collateral ratio of BRAX
-     * @return globalCollateralValue Current free value in the BRAX system
-     * @return minting_fee Fee to mint BRAX
-     * @return redemption_fee Feed to redeem BRAX
+     * @return braxPrice     Oracle price of BRAX
+     * @return bxsPrice      Oracle price of BXS
+     * @return supply        Total supply of BRAX
+     * @return gcr           Current global collateral ratio of BRAX
+     * @return gcv           Current free value in the BRAX system
+     * @return mintingFee    Fee to mint BRAX
+     * @return redemptionFee Fee to redeem BRAX
      */
-    function brax_info() public view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256) {
+    function brax_info() public view returns (uint256 braxPrice, uint256 bxsPrice, uint256 supply, uint256 gcr, uint256 gcv, uint256 mintingFee, uint256 redemptionFee) {
         return (
             oracle_price(PriceChoice.BRAX), // brax_price()
             oracle_price(PriceChoice.BXS), // bxs_price()
@@ -204,7 +202,7 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
      * @notice Iterate through all brax pools and calculate all value of collateral in all pools globally denominated in BTC
      * @return balance Balance of all pools denominated in BTC (e18)
      */
-    function globalCollateralValue() public view returns (uint256) {
+    function globalCollateralValue() public view returns (uint256 balance) {
         uint256 total_collateral_value_d18 = 0; 
 
         for (uint i = 0; i < brax_pools_array.length; i++){ 
@@ -218,11 +216,13 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
 
     /* ========== PUBLIC FUNCTIONS ========== */
     
+    /// @notice Last time the refreshCollateralRatio function was called
+    uint256 public last_call_time; 
+
     /**
      * @notice Update the collateral ratio based on the current price of BRAX
      * @dev last_call_time limits updates to once per hour to prevent multiple calls per expansion
      */
-    uint256 public last_call_time; // Last time the refreshCollateralRatio function was called
     function refreshCollateralRatio() public {
         require(collateral_ratio_paused == false, "Collateral Ratio has been paused");
         require(block.timestamp - last_call_time >= refresh_cooldown, "Must wait for the refresh cooldown since last refresh");
@@ -251,9 +251,9 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
     /**
      * @notice Nonces for permit
      * @param owner Token owner's address (Authorizer)
-     * @return next nonce
+     * @return nonce next nonce
      */
-    function permitNonces(address owner) external view returns (uint256) {
+    function permitNonces(address owner) external view returns (uint256 nonce) {
         return nonces[owner];
     }
 
@@ -473,6 +473,7 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
     /**
      * @notice Set the BRAX / wBTC Oracle
      * @param _brax_oracle_addr new address for the oracle
+     * @param _wbtc_address wBTC address for chain
     */
     function setBRAXWBtcOracle(address _brax_oracle_addr, address _wbtc_address) public onlyByOwnerGovernanceOrController {
         require((_brax_oracle_addr != address(0)) && (_wbtc_address != address(0)), "Zero address detected");
@@ -486,6 +487,7 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
     /**
      * @notice Set the BXS / wBTC Oracle
      * @param _bxs_oracle_addr new address for the oracle
+     * @param _wbtc_address wBTC address for chain
     */
     function setBXSWBtcOracle(address _bxs_oracle_addr, address _wbtc_address) public onlyByOwnerGovernanceOrController {
         require((_bxs_oracle_addr != address(0)) && (_wbtc_address != address(0)), "Zero address detected");
