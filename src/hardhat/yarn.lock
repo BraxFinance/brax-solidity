@@ -821,11 +821,6 @@
   dependencies:
     tslib "~2.3.0"
 
-"@hq20/solidity-parser-antlr@0.4.12-alpha.0":
-  version "0.4.12-alpha.0"
-  resolved "https://registry.yarnpkg.com/@hq20/solidity-parser-antlr/-/solidity-parser-antlr-0.4.12-alpha.0.tgz#4def513caf8c5e76870ad0cd51d301faf0fb7747"
-  integrity sha512-LHyLMFgAJi5U4eakqqUvtpxxIv3AA4QDJbv6//xYgiRqQsTY8BoUayqU82f8dHcZJ44Y6H+yzml/vszEPUOe4g==
-
 "@improbable-eng/grpc-web@^0.12.0":
   version "0.12.0"
   resolved "https://registry.yarnpkg.com/@improbable-eng/grpc-web/-/grpc-web-0.12.0.tgz#9b10a7edf2a1d7672f8997e34a60e7b70e49738f"
@@ -969,10 +964,10 @@
   resolved "https://registry.yarnpkg.com/@metamask/safe-event-emitter/-/safe-event-emitter-2.0.0.tgz#af577b477c683fad17c619a78208cede06f9605c"
   integrity sha512-/kSXhY692qiV1MXu6EeOZvg5nECLclxNXcKCxJ3cXQgYuRymRHpdx/t7JXfsK+JLjwA1e1c1/SBrlQYpusC29Q==
 
-"@mitche50/soldocgen@^0.0.8":
-  version "0.0.8"
-  resolved "https://registry.yarnpkg.com/@mitche50/soldocgen/-/soldocgen-0.0.8.tgz#87fe4dff14a2b1cb11c26e5bb4a435b015d9cae3"
-  integrity sha512-0X0/alS8bfLlfsbfI2U+7DmBTBJiilEyQM5Kryg62KFFUoy+k1+yrHq7+7bJertL3DNdmrJwLEmIKCQw+E2prg==
+"@mitche50/soldocgen@^0.0.9":
+  version "0.0.9"
+  resolved "https://registry.yarnpkg.com/@mitche50/soldocgen/-/soldocgen-0.0.9.tgz#76969fcdce53e51a3e2241ffe52ee0bd963ad487"
+  integrity sha512-UDzyP+J2SDeGz6X2eShAFEsjPeONmlw64sahSugTMHRIysjn96JuLGHDuZFU2QS2FNiHTqgq5wE9Dc4O8n710Q==
   dependencies:
     "@mitche50/solidity-parser-antlr" "0.4.11-alpha.0"
     directory-tree "2.2.4"
@@ -12553,15 +12548,6 @@ solc@^0.6.3:
     require-from-string "^2.0.0"
     semver "^5.5.0"
     tmp "0.0.33"
-
-soldocgen@^0.0.3:
-  version "0.0.3"
-  resolved "https://registry.yarnpkg.com/soldocgen/-/soldocgen-0.0.3.tgz#0773086a58a127381c8d1a9d767e7e6a70620aeb"
-  integrity sha512-Q4vcGhuPUYPudrirVO2TpTmssPO5i3G+l+0DFNEToQfxRbqeqYui0rv/oKnBaRJ4ef831q9poZnpATgDYs4uGw==
-  dependencies:
-    "@hq20/solidity-parser-antlr" "0.4.12-alpha.0"
-    directory-tree "2.2.4"
-    meow "7.0.1"
 
 solidity-ast@^0.4.15:
   version "0.4.31"

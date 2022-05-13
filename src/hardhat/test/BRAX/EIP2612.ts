@@ -8,18 +8,18 @@ describe('ERC20Permit Testing', function () {
 	let owner: SignerWithAddress;
 	let brax: Contract;
 	let BRAXFactory: ContractFactory;
-	let governance_timelock: string;
+	let governanceTimelock: string;
 
 	const name: string = 'Brax';
 	const symbol: string = 'BRAX';
-	const random_address = '0x853d955aCEf822Db058eb8505911ED77F175b99e';
+	const randomAddress = '0x853d955aCEf822Db058eb8505911ED77F175b99e';
 
 	beforeEach(async function () {
 		[owner] = await ethers.getSigners();
-		governance_timelock = '0xB65cef03b9B89f99517643226d76e286ee999e77';
+		governanceTimelock = '0xB65cef03b9B89f99517643226d76e286ee999e77';
 
 		BRAXFactory = await ethers.getContractFactory('BRAXBtcSynth');
-		brax = await BRAXFactory.deploy(name, symbol, owner.address, governance_timelock);
+		brax = await BRAXFactory.deploy(name, symbol, owner.address, governanceTimelock);
 		await brax.deployed();
 	});
 
@@ -33,7 +33,7 @@ describe('ERC20Permit Testing', function () {
 		const SECOND = 1000;
 		const fromAddress = wallet.address;
 		const expiry = BigNumber.from(Math.trunc((Date.now() + 120 * SECOND) / SECOND));
-		const spender = random_address;
+		const spender = randomAddress;
 		const value = '100000000';
 		const config = {
 			nonce: await brax.nonces(wallet.address),
@@ -63,7 +63,7 @@ describe('ERC20Permit Testing', function () {
 		const SECOND = 1000;
 		const fromAddress = wallet.address;
 		const expiry = BigNumber.from(Math.trunc((Date.now() + 120 * SECOND) / SECOND));
-		const spender = random_address;
+		const spender = randomAddress;
 		const value = '100000000';
 		const config = {
 			nonce: await brax.nonces(wallet.address),
@@ -84,7 +84,7 @@ describe('ERC20Permit Testing', function () {
 		const SECOND = 1000;
 		const fromAddress = wallet.address;
 		const expiry = BigNumber.from(Math.trunc((Date.now() + 120 * SECOND) / SECOND));
-		const spender = random_address;
+		const spender = randomAddress;
 		const value = '100000000';
 		const config = {
 			nonce: await brax.nonces(wallet.address),
@@ -105,7 +105,7 @@ describe('ERC20Permit Testing', function () {
 		const SECOND = 1000;
 		const fromAddress = wallet.address;
 		const expiry = BigNumber.from(Math.trunc((Date.now() + 120 * SECOND) / SECOND));
-		const spender = random_address;
+		const spender = randomAddress;
 		const value = '100000000';
 		const config = {
 			nonce: await brax.nonces(wallet.address),
@@ -126,7 +126,7 @@ describe('ERC20Permit Testing', function () {
 		const SECOND = 1000;
 		const fromAddress = wallet.address;
 		const expiry = BigNumber.from(Math.trunc((Date.now() + 120 * SECOND) / SECOND));
-		const spender = random_address;
+		const spender = randomAddress;
 		const value = '100000000';
 		const config = {
 			nonce: await brax.nonces(wallet.address),
@@ -148,7 +148,7 @@ describe('ERC20Permit Testing', function () {
 		const SECOND = 1000;
 		const fromAddress = wallet.address;
 		const expiry = BigNumber.from(Math.trunc((Date.now() + 120 * SECOND) / SECOND));
-		const spender = random_address;
+		const spender = randomAddress;
 		const value = '100000000';
 		const config = {
 			nonce: await brax.nonces(wallet.address),
@@ -171,7 +171,7 @@ describe('ERC20Permit Testing', function () {
 		const SECOND = 1000;
 		const fromAddress = wallet.address;
 		const expiry = BigNumber.from(Math.trunc((Date.now() + 120 * SECOND) / SECOND));
-		const spender = random_address;
+		const spender = randomAddress;
 		const value = '100000000';
 		const incorrectValue = '100000001';
 		const config = {
@@ -201,7 +201,7 @@ describe('ERC20Permit Testing', function () {
 		const SECOND = 1000;
 		const fromAddress = wallet.address;
 		const expiry = BigNumber.from(Math.trunc((Date.now() + 120 * SECOND) / SECOND));
-		const spender = random_address;
+		const spender = randomAddress;
 		const invalidSpender = wallet.address;
 		const value = '100000000';
 		const config = {
@@ -231,7 +231,7 @@ describe('ERC20Permit Testing', function () {
 		const SECOND = 1000;
 		const fromAddress = wallet.address;
 		const expiry = BigNumber.from(Math.trunc((Date.now() - 100000 * SECOND) / SECOND));
-		const spender = random_address;
+		const spender = randomAddress;
 		const value = '100000000';
 		const config = {
 			nonce: await brax.nonces(wallet.address),

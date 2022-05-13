@@ -1,2 +1,2 @@
 -   CONTRACTS
-    -   [BRAXBtcSynth](./BRAXBtcSynth.md)
+    -   [BraxPoolV3](./BraxPoolV3.md)

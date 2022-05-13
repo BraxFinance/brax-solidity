@@ -36,9 +36,9 @@ contract TokenVesting {
     uint256 private _start;
     uint256 private _duration;
 
-    address public _BXS_contract_address;
+    address public _BXSContractAddress;
     ERC20 BXS;
-    address public _timelock_address;
+    address public _timelockAddress;
     bool public _revocable;
 
     uint256 private _released;
@@ -77,15 +77,15 @@ contract TokenVesting {
         _owner = msg.sender;
     }
 
-    function setBXSAddress(address BXS_address) public {
+    function setBXSAddress(address BXSAddress) public {
         require(msg.sender == _owner, "must be set by the owner");
-        _BXS_contract_address = BXS_address;
-        BXS = ERC20(BXS_address);
+        _BXSContractAddress = BXSAddress;
+        BXS = ERC20(BXSAddress);
     }
 
-    function setTimelockAddress(address timelock_address) public {
+    function setTimelockAddress(address timelockAddress) public {
         require(msg.sender == _owner, "must be set by the owner");
-        _timelock_address = timelock_address;
+        _timelockAddress = timelockAddress;
     }
 
     /**
@@ -158,7 +158,7 @@ contract TokenVesting {
      * remain in the contract, the rest are returned to the owner.
      */
     function revoke() public {
-        require(msg.sender == _timelock_address, "Must be called by the timelock contract");
+        require(msg.sender == _timelockAddress, "Must be called by the timelock contract");
         require(_revocable, "TokenVesting: cannot revoke");
         require(!_revoked, "TokenVesting: token already revoked");
 
@@ -179,7 +179,7 @@ contract TokenVesting {
         require(msg.sender == _beneficiary, "Must be called by the beneficiary");
 
         // Cannot recover the staking token or the rewards token
-        require(tokenAddress != _BXS_contract_address, "Cannot withdraw the BXS through this function");
+        require(tokenAddress != _BXSContractAddress, "Cannot withdraw the BXS through this function");
         ERC20(tokenAddress).transfer(_beneficiary, tokenAmount);
     }
 

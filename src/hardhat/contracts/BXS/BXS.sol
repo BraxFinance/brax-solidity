@@ -39,12 +39,12 @@ contract BRAXShares is ERC20Custom, AccessControl, Owned {
     string public name;
     uint8 public constant decimals = 18;
     
-    uint256 public constant genesis_supply = 100000000e18; // 100M is printed upon genesis
-    uint256 public BXS_DAO_min; // Minimum BXS required to join DAO groups 
+    uint256 public constant genesisSupply = 100000000e18; // 100M is printed upon genesis
+    uint256 public BXS_DAO_MIN; // Minimum BXS required to join DAO groups 
 
-    address public owner_address;
-    address public oracle_address;
-    address public timelock_address; // Governance timelock address
+    address public ownerAddress;
+    address public oracleAddress;
+    address public timelockAddress; // Governance timelock address
     BRAXBtcSynth private BRAX;
 
     bool public trackingVotes = true; // Tracking votes (only change if need to disable votes)
@@ -64,17 +64,17 @@ contract BRAXShares is ERC20Custom, AccessControl, Owned {
     /* ========== MODIFIERS ========== */
 
     modifier onlyPools() {
-       require(BRAX.brax_pools(msg.sender) == true, "Only brax pools can mint new BXS");
+       require(BRAX.braxPools(msg.sender) == true, "Only brax pools can mint new BXS");
         _;
     } 
     
     modifier onlyByOwnGov() {
-        require(msg.sender == owner || msg.sender == timelock_address, "You are not an owner or the governance timelock");
+        require(msg.sender == owner || msg.sender == timelockAddress, "You are not an owner or the governance timelock");
         _;
     }
 
     modifier onlyByOwnerOrGovernance() {
-        require(msg.sender == owner || msg.sender == timelock_address, "Not the owner or the governance timelock");
+        require(msg.sender == owner || msg.sender == timelockAddress, "Not the owner or the governance timelock");
         _;
     }
 
@@ -83,45 +83,45 @@ contract BRAXShares is ERC20Custom, AccessControl, Owned {
     constructor (
         string memory _name,
         string memory _symbol, 
-        address _oracle_address,
-        address _creator_address,
-        address _timelock_address
-    ) public Owned(_creator_address){
-        require((_oracle_address != address(0)) && (_timelock_address != address(0)), "Zero address detected"); 
+        address _oracleAddress,
+        address _creatorAddress,
+        address _timelockAddress
+    ) public Owned(_creatorAddress){
+        require((_oracleAddress != address(0)) && (_timelockAddress != address(0)), "Zero address detected"); 
         name = _name;
         symbol = _symbol;
-        oracle_address = _oracle_address;
-        timelock_address = _timelock_address;
+        oracleAddress = _oracleAddress;
+        timelockAddress = _timelockAddress;
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
-        _mint(_creator_address, genesis_supply);
+        _mint(_creatorAddress, genesisSupply);
 
         // Do a checkpoint for the owner
-        _writeCheckpoint(_creator_address, 0, 0, uint96(genesis_supply));
+        _writeCheckpoint(_creatorAddress, 0, 0, uint96(genesisSupply));
     }
 
     /* ========== RESTRICTED FUNCTIONS ========== */
 
-    function setOracle(address new_oracle) external onlyByOwnGov {
-        require(new_oracle != address(0), "Zero address detected");
+    function setOracle(address newOracle) external onlyByOwnGov {
+        require(newOracle != address(0), "Zero address detected");
 
-        oracle_address = new_oracle;
+        oracleAddress = newOracle;
     }
 
-    function setTimelock(address new_timelock) external onlyByOwnGov {
-        require(new_timelock != address(0), "Timelock address cannot be 0");
-        timelock_address = new_timelock;
+    function setTimelock(address newTimelock) external onlyByOwnGov {
+        require(newTimelock != address(0), "Timelock address cannot be 0");
+        timelockAddress = newTimelock;
     }
     
-    function setBRAXAddress(address brax_contract_address) external onlyByOwnGov {
-        require(brax_contract_address != address(0), "Zero address detected");
+    function setBRAXAddress(address braxContractAddress) external onlyByOwnGov {
+        require(braxContractAddress != address(0), "Zero address detected");
 
-        BRAX = BRAXBtcSynth(brax_contract_address);
+        BRAX = BRAXBtcSynth(braxContractAddress);
 
-        emit BRAXAddressSet(brax_contract_address);
+        emit BRAXAddressSet(braxContractAddress);
     }
 
-    function setBXSMinDAO(uint256 min_BXS) external onlyByOwnerOrGovernance {
-        BXS_DAO_min = min_BXS;
+    function setBXSMinDAO(uint256 minBXS) external onlyByOwnerOrGovernance {
+        BXS_DAO_MIN = minBXS;
     }
     
     function mint(address to, uint256 amount) public onlyPools {
@@ -129,31 +129,31 @@ contract BRAXShares is ERC20Custom, AccessControl, Owned {
     }
     
     // This function is what other brax pools will call to mint new BXS (similar to the BRAX mint) 
-    function pool_mint(address m_address, uint256 m_amount) external onlyPools {        
+    function poolMint(address mAddress, uint256 mAmount) external onlyPools {        
         if(trackingVotes){
             uint32 srcRepNum = numCheckpoints[address(this)];
             uint96 srcRepOld = srcRepNum > 0 ? checkpoints[address(this)][srcRepNum - 1].votes : 0;
-            uint96 srcRepNew = add96(srcRepOld, uint96(m_amount), "pool_mint new votes overflows");
+            uint96 srcRepNew = add96(srcRepOld, uint96(mAmount), "poolMint new votes overflows");
             _writeCheckpoint(address(this), srcRepNum, srcRepOld, srcRepNew); // mint new votes
-            trackVotes(address(this), m_address, uint96(m_amount));
+            trackVotes(address(this), mAddress, uint96(mAmount));
         }
 
-        super._mint(m_address, m_amount);
-        emit BXSMinted(address(this), m_address, m_amount);
+        super._mint(mAddress, mAmount);
+        emit BXSMinted(address(this), mAddress, mAmount);
     }
 
     // This function is what other brax pools will call to burn BXS 
-    function pool_burn_from(address b_address, uint256 b_amount) external onlyPools {
+    function poolBurnFrom(address bAddress, uint256 bAmount) external onlyPools {
         if(trackingVotes){
-            trackVotes(b_address, address(this), uint96(b_amount));
+            trackVotes(bAddress, address(this), uint96(bAmount));
             uint32 srcRepNum = numCheckpoints[address(this)];
             uint96 srcRepOld = srcRepNum > 0 ? checkpoints[address(this)][srcRepNum - 1].votes : 0;
-            uint96 srcRepNew = sub96(srcRepOld, uint96(b_amount), "pool_burn_from new votes underflows");
+            uint96 srcRepNew = sub96(srcRepOld, uint96(bAmount), "poolBurnFrom new votes underflows");
             _writeCheckpoint(address(this), srcRepNum, srcRepOld, srcRepNew); // burn votes
         }
 
-        super._burnFrom(b_address, b_amount);
-        emit BXSBurned(b_address, address(this), b_amount);
+        super._burnFrom(bAddress, bAmount);
+        emit BXSBurned(bAddress, address(this), bAmount);
     }
 
     function toggleVotes() external onlyByOwnGov {

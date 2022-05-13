@@ -7,7 +7,7 @@ import IUniswapV2Router02 from '@uniswap/v2-periphery/build/IUniswapV2Router02.j
 
 const router = '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D';
 const uniswapFactory = '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f';
-const random_address = '0x853d955aCEf822Db058eb8505911ED77F175b99e';
+const randomAddress = '0x853d955aCEf822Db058eb8505911ED77F175b99e';
 const wbtc = '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599';
 
 const braxName: string = 'Brax';
@@ -77,9 +77,9 @@ describe('Oracle', function () {
 	let bxs: Contract;
 	let BRAXFactory: ContractFactory;
 	let BXSFactory: ContractFactory;
-	let governance_timelock: string;
+	let governanceTimelock: string;
 	let wbtcOracle: Contract;
-	let deployed_pool: Contract;
+	let deployedPool: Contract;
 
 	let wbtcWhale: SignerWithAddress;
 	let wbtcWhaleAccount: string;
@@ -92,12 +92,12 @@ describe('Oracle', function () {
 	beforeEach(async function () {
 		[owner] = await ethers.getSigners();
 		startBlock = await ethers.provider.getBlockNumber();
-		governance_timelock = '0xB65cef03b9B89f99517643226d76e286ee999e77';
+		governanceTimelock = '0xB65cef03b9B89f99517643226d76e286ee999e77';
 
 		// Impersonate an address with wBTC to mint
 		// If this address no longer has funds, check etherscan to get an
 		// address with sufficient funds to impersonate locally
-		wbtcWhaleAccount = '0xB60C61DBb7456f024f9338c739B02Be68e3F545C';
+		wbtcWhaleAccount = '0xE78388b4CE79068e89Bf8aA7f218eF6b9AB0e9d0';
 		await network.provider.request({
 			method: 'hardhat_impersonateAccount',
 			params: [wbtcWhaleAccount],
@@ -106,15 +106,15 @@ describe('Oracle', function () {
 
 		// Deploy BRAX, BXS and a pool to create a local version of BRAX
 		BRAXFactory = await ethers.getContractFactory('BRAXBtcSynth');
-		brax = await BRAXFactory.deploy(braxName, braxSymbol, owner.address, governance_timelock);
+		brax = await BRAXFactory.deploy(braxName, braxSymbol, owner.address, governanceTimelock);
 		await brax.deployed();
 
 		BXSFactory = await ethers.getContractFactory('BRAXShares');
-		bxs = await BXSFactory.deploy(bxsName, bxsSymbol, random_address, owner.address, governance_timelock);
+		bxs = await BXSFactory.deploy(bxsName, bxsSymbol, randomAddress, owner.address, governanceTimelock);
 		await bxs.deployed();
 
 		const PoolFactory = await ethers.getContractFactory('BraxPoolV3');
-		deployed_pool = await PoolFactory.deploy(
+		deployedPool = await PoolFactory.deploy(
 			owner.address,
 			owner.address,
 			owner.address,
@@ -124,18 +124,18 @@ describe('Oracle', function () {
 			brax.address,
 			bxs.address,
 		);
-		await deployed_pool.deployed();
+		await deployedPool.deployed();
 
-		await expect(brax.brax_pools_array(0)).to.be.reverted;
+		await expect(brax.braxPoolsArray(0)).to.be.reverted;
 
-		const add_pool = await brax.addPool(deployed_pool.address);
-		await add_pool.wait();
+		const addPool = await brax.addPool(deployedPool.address);
+		await addPool.wait();
 
-		const new_pool = await brax.brax_pools_array(0);
-		expect(new_pool).to.be.equal(deployed_pool.address);
+		const newPool = await brax.braxPoolsArray(0);
+		expect(newPool).to.be.equal(deployedPool.address);
 
 		// Enable wBTC collateral and set oracle
-		const enableWbtc = await deployed_pool.toggleCollateral(0);
+		const enableWbtc = await deployedPool.toggleCollateral(0);
 		await enableWbtc.wait();
 
 		const OracleFactory = await ethers.getContractFactory('ChainlinkWBTCBTCPriceConsumer');
@@ -147,14 +147,14 @@ describe('Oracle', function () {
 
 		// We need to modify the thresholds to prevent the transcation from reverting
 		// This is due to mocking the oracle and no reliable price coming through
-		const pt = await deployed_pool.setPriceThresholds(0, 10000000000);
+		const pt = await deployedPool.setPriceThresholds(0, 10000000000);
 		await pt.wait();
 
 		// Set approval for pool to spend wBTC
-		const approvePoolwBtc = await wbtcContract.connect(wbtcWhale).approve(deployed_pool.address, '1000000000');
+		const approvePoolwBtc = await wbtcContract.connect(wbtcWhale).approve(deployedPool.address, '1000000000');
 		await approvePoolwBtc.wait();
 
-		const mintBrax = await deployed_pool
+		const mintBrax = await deployedPool
 			.connect(wbtcWhale)
 			.mintBrax(0, '10000000000000000000', '9900000000000000000', '1000000000', 0, false);
 		await mintBrax.wait();
@@ -206,21 +206,6 @@ describe('Oracle', function () {
 		await depositBxs.wait();
 	});
 
-	afterEach(async function () {
-		// Reset time for the network
-		await network.provider.request({
-			method: 'hardhat_reset',
-			params: [
-				{
-					forking: {
-						jsonRpcUrl: process.env.ETH_URL,
-						blockNumber: startBlock,
-					},
-				},
-			],
-		});
-	});
-
 	it('Creates an oracle and updates after swap', async function () {
 		// We deploy an oracle and consult it.  Then we perform swaps
 		// and make sure the oracle updates as expected
@@ -250,7 +235,7 @@ describe('Oracle', function () {
 	it('Assigns an oracle to BRAX', async function () {
 		await deployOracle(true, brax, owner, brax);
 
-		const braxPrice = await brax.brax_price();
+		const braxPrice = await brax.braxPrice();
 		const wBtcOraclePrice = await wbtcOracle.getLatestPrice();
 		expect(braxPrice).to.be.closeTo(wBtcOraclePrice, '1');
 	});
@@ -258,7 +243,7 @@ describe('Oracle', function () {
 	it('Assigns an oracle to BXS', async function () {
 		await deployOracle(false, bxs, owner, brax);
 
-		const bxsPrice = await brax.bxs_price();
+		const bxsPrice = await brax.bxsPrice();
 		const wBtcOraclePrice = await wbtcOracle.getLatestPrice();
 		expect(bxsPrice).to.be.closeTo(BigNumber.from(wBtcOraclePrice.div(10)), '1');
 	});
@@ -268,7 +253,7 @@ describe('Oracle', function () {
 		await network.provider.send('evm_increaseTime', [3800]);
 		await network.provider.send('evm_mine');
 
-		await expect(brax.brax_price()).to.be.reverted;
+		await expect(brax.braxPrice()).to.be.reverted;
 	});
 
 	it('Correctly returns Brax Info', async function () {
@@ -283,20 +268,20 @@ describe('Oracle', function () {
 		await braxOracleUpdate.wait();
 		await bxsOracleUpdate.wait();
 
-		const braxInfo = await brax.brax_info();
+		const braxInfo = await brax.braxInfo();
 		expect(braxInfo.length).to.equal(7);
 	});
 
 	it('Correctly returns the global collateral ratio', async function () {
-		// We check the GCR is set properly, then swap to make price > price_target + price_band
+		// We check the GCR is set properly, then swap to make price > priceTarget + priceBand
 		// This makes the GCR modifiable via refreshCollateralRatio
 		// We then swap back to have the price within the price band and confirm that refreshCollateralRatio
-		// cannot be called.  Finally, we swap again to make price < price_target - price_band to increase
+		// cannot be called.  Finally, we swap again to make price < priceTarget - priceBand to increase
 		// the collateral ratio
 
 		const braxOracle = await deployOracle(true, brax, owner, brax);
 
-		const gcr = await brax.global_collateral_ratio();
+		const gcr = await brax.globalCollateralRatio();
 		expect(gcr).to.equal(1e8);
 
 		// Move price above price target and refresh
@@ -305,7 +290,7 @@ describe('Oracle', function () {
 		const refresh = await brax.refreshCollateralRatio();
 		await refresh.wait();
 
-		const gcrAfterSwap = await brax.global_collateral_ratio();
+		const gcrAfterSwap = await brax.globalCollateralRatio();
 		expect(gcrAfterSwap).to.be.equal(BigNumber.from('100000000').sub('250000'));
 
 		const braxBalance = (await brax.balanceOf(wbtcWhaleAccount)).toString();
@@ -316,7 +301,7 @@ describe('Oracle', function () {
 		const refresh2 = await brax.refreshCollateralRatio();
 		await refresh2.wait();
 
-		const gcrAfterSwap2 = await brax.global_collateral_ratio();
+		const gcrAfterSwap2 = await brax.globalCollateralRatio();
 		expect(gcrAfterSwap2).to.be.equal(BigNumber.from('100000000').sub('250000'));
 
 		// Move price below price target and refresh
@@ -325,7 +310,7 @@ describe('Oracle', function () {
 		const refresh3 = await brax.refreshCollateralRatio();
 		await refresh3.wait();
 
-		const gcrAfterSwap3 = await brax.global_collateral_ratio();
+		const gcrAfterSwap3 = await brax.globalCollateralRatio();
 		expect(gcrAfterSwap3).to.be.equal(BigNumber.from('100000000'));
 
 		await expect(brax.refreshCollateralRatio()).to.be.revertedWith(
@@ -336,7 +321,7 @@ describe('Oracle', function () {
 	it('Should not allow you to move above MAX_COLLATERAL_RATIO', async function () {
 		const braxOracle = await deployOracle(true, brax, owner, brax);
 
-		const gcr = await brax.global_collateral_ratio();
+		const gcr = await brax.globalCollateralRatio();
 		expect(gcr).to.equal(1e8);
 
 		const maxCollateralRatio = await brax.MAX_COLLATERAL_RATIO();
@@ -346,7 +331,7 @@ describe('Oracle', function () {
 		// Move price below price target and try to raise CR
 		await swapTokens(brax, wbtcContract, owner, routerContract, braxOracle, swapAmount);
 
-		const gcrAfterSwap = await brax.global_collateral_ratio();
+		const gcrAfterSwap = await brax.globalCollateralRatio();
 		expect(gcr).to.equal(gcrAfterSwap);
 	});
 
@@ -362,7 +347,7 @@ describe('Oracle', function () {
 		const refresh = await brax.refreshCollateralRatio();
 		await refresh.wait();
 
-		const gcr = await brax.global_collateral_ratio();
+		const gcr = await brax.globalCollateralRatio();
 		expect(gcr).to.be.equal('0');
 
 		await network.provider.send('evm_increaseTime', [3800]);
@@ -372,7 +357,7 @@ describe('Oracle', function () {
 
 		const refresh2 = await brax.refreshCollateralRatio();
 		await refresh2.wait();
-		const gcr2 = await brax.global_collateral_ratio();
+		const gcr2 = await brax.globalCollateralRatio();
 		expect(gcr2).to.be.equal('0');
 	});
 
@@ -385,10 +370,10 @@ describe('Oracle', function () {
 		expect(gcv).to.equal('10000000000000000000');
 
 		// Add more collateral and then recheck
-		const approvePoolwBtc = await wbtcContract.connect(wbtcWhale).approve(deployed_pool.address, '1000000000');
+		const approvePoolwBtc = await wbtcContract.connect(wbtcWhale).approve(deployedPool.address, '1000000000');
 		await approvePoolwBtc.wait();
 
-		const mintBrax = await deployed_pool
+		const mintBrax = await deployedPool
 			.connect(wbtcWhale)
 			.mintBrax(0, '10000000000000000000', '9900000000000000000', '1000000000', 0, false);
 		await mintBrax.wait();
@@ -396,10 +381,10 @@ describe('Oracle', function () {
 		const gcv2 = await brax.globalCollateralValue();
 		expect(gcv2).to.equal('20000000000000000000');
 
-		const approvePool = await brax.connect(wbtcWhale).approve(deployed_pool.address, '1000000000000000000');
+		const approvePool = await brax.connect(wbtcWhale).approve(deployedPool.address, '1000000000000000000');
 		await approvePool.wait();
 
-		const burnBrax = await deployed_pool.connect(wbtcWhale).redeemBrax(0, '1000000000000000000', 0, 0);
+		const burnBrax = await deployedPool.connect(wbtcWhale).redeemBrax(0, '1000000000000000000', 0, 0);
 		await burnBrax.wait();
 
 		const gcv3 = await brax.globalCollateralValue();
