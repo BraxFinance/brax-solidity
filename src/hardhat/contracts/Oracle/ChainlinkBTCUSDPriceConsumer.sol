@@ -9,6 +9,7 @@ contract ChainlinkBTCUSDPriceConsumer {
 
 
     constructor () public {
+        // BTC/USD Chainlink Price Feed
         priceFeed = AggregatorV3Interface(0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c);
     }
 
