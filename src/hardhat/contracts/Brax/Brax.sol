@@ -103,7 +103,7 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
         string memory _symbol,
         address _creatorAddress,
         address _timelockAddress
-    ) public Owned(_creatorAddress){
+    ) Owned(_creatorAddress){
         require(_timelockAddress != address(0), "Zero address detected"); 
         name = _name;
         symbol = _symbol;
@@ -178,15 +178,15 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
      * @notice Return all info regarding BRAX
      * @dev This is needed to avoid costly repeat calls to different getter functions
      * @dev It is cheaper gas-wise to just dump everything and only use some of the info
-     * @return braxPrice     Oracle price of BRAX
-     * @return bxsPrice      Oracle price of BXS
+     * @return priceOfBrax   Oracle price of BRAX
+     * @return priceOfBxs    Oracle price of BXS
      * @return supply        Total supply of BRAX
      * @return gcr           Current global collateral ratio of BRAX
      * @return gcv           Current free value in the BRAX system
-     * @return mintingFee    Fee to mint BRAX
-     * @return redemptionFee Fee to redeem BRAX
+     * @return mintFee       Fee to mint BRAX
+     * @return redeemFee     Fee to redeem BRAX
      */
-    function braxInfo() public view returns (uint256 braxPrice, uint256 bxsPrice, uint256 supply, uint256 gcr, uint256 gcv, uint256 mintingFee, uint256 redemptionFee) {
+    function braxInfo() public view returns (uint256 priceOfBrax, uint256 priceOfBxs, uint256 supply, uint256 gcr, uint256 gcv, uint256 mintFee, uint256 redeemFee) {
         return (
             oraclePrice(PriceChoice.BRAX), // braxPrice()
             oraclePrice(PriceChoice.BXS), // bxsPrice()

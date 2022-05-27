@@ -3,18 +3,16 @@ pragma solidity >=0.6.11;
 
 import "./AggregatorV3Interface.sol";
 
-contract ChainlinkBTCUSDPriceConsumer {
+contract ChainlinkPriceConsumer {
 
     AggregatorV3Interface internal priceFeed;
 
-
-    constructor () public {
-        // BTC/USD Chainlink Price Feed
-        priceFeed = AggregatorV3Interface(0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c);
+    constructor (address _priceFeed) public {
+        priceFeed = AggregatorV3Interface(_priceFeed);
     }
 
     /**
-     * Returns the latest price
+     * @return price The latest price
      */
     function getLatestPrice() public view returns (int) {
         (uint80 roundID, int price, , uint256 updatedAt, uint80 answeredInRound) = priceFeed.latestRoundData();
@@ -23,6 +21,9 @@ contract ChainlinkBTCUSDPriceConsumer {
         return price;
     }
 
+    /**
+     * @return decimals Decimals of the price feed  
+     */
     function getDecimals() public view returns (uint8) {
         return priceFeed.decimals();
     }

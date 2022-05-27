@@ -87,8 +87,8 @@ contract BraxPoolV3 is Owned {
     uint256 public bbkMaxColE18OutPerHour = 1e18;
 
     // Recollat related
-    mapping(uint256 => uint256) public rctHourlyCum; // Epoch hour ->  FXS out in that hour
-    uint256 public rctMaxFxsOutPerHour = 1000e18;
+    mapping(uint256 => uint256) public rctHourlyCum; // Epoch hour ->  BXS out in that hour
+    uint256 public rctMaxBxsOutPerHour = 1000e18;
 
     // Fees and rates
     // getters are in collateralInformation()
@@ -96,7 +96,7 @@ contract BraxPoolV3 is Owned {
     uint256[] private redemptionFee;
     uint256[] private buybackFee;
     uint256[] private recollatFee;
-    uint256 public bonusRate; // Bonus rate on FXS minted during recollateralize(); 6 decimals of precision, set to 0.75% on genesis
+    uint256 public bonusRate; // Bonus rate on BXS minted during recollateralize(); 6 decimals of precision, set to 0.75% on genesis
     
     // Constants for various precisions
     uint256 private constant PRICE_PRECISION = 1e8;
@@ -217,8 +217,16 @@ contract BraxPoolV3 is Owned {
 
     /* ========== INTERNAL FUNCTIONS ========== */
 
+    /**
+     * @notice Compute the threshold for buyback and recollateralization to throttle
+     * @notice both in times of high volatility
+     * @param cur Current amount already consumed in the current hour
+     * @param max Maximum allowable in the current hour
+     * @param theo Amount to theoretically distribute, used to check against available amounts
+     * @return amount Amount allowable to distribute
+     */
     /// @dev helper function to help limit volatility in calculations
-    function comboCalcBbkRct(uint256 cur, uint256 max, uint256 theo) internal pure returns (uint256) {
+    function comboCalcBbkRct(uint256 cur, uint256 max, uint256 theo) internal pure returns (uint256 amount) {
         if (cur >= max) {
             // If the hourly limit has already been reached, return 0;
             return 0;
@@ -398,7 +406,7 @@ contract BraxPoolV3 is Owned {
         uint256 currentHrRct = rctHourlyCum[curEpochHr()];
 
         // Account for the throttling
-        return comboCalcBbkRct(currentHrRct, rctMaxFxsOutPerHour, bxsTheoOut);
+        return comboCalcBbkRct(currentHrRct, rctMaxBxsOutPerHour, bxsTheoOut);
     }
 
     /// @return hour current epoch hour
@@ -477,6 +485,15 @@ contract BraxPoolV3 is Owned {
         BRAX.poolMint(msg.sender, totalBraxMint);
     }
 
+    /**
+     * @notice Redeem BRAX for BXS / Collateral combination
+     * @param colIdx integer value of the collateral index
+     * @param braxAmount Amount of BRAX to redeem
+     * @param bxsOutMin Minimum amount of BXS to redeem for
+     * @param colOutMin Minimum amount of collateral to redeem for
+     * @return collatOut Amount of collateral redeemed
+     * @return bxsOut Amount of BXS redeemed
+     */
     function redeemBrax(
         uint256 colIdx, 
         uint256 braxAmount, 
@@ -535,9 +552,15 @@ contract BraxPoolV3 is Owned {
         }
     }
 
-    // After a redemption happens, transfer the newly minted BXS and owed collateral from this pool
-    // contract to the user. Redemption is split into two functions to prevent flash loans from being able
-    // to take out BRAX/collateral from the system, use an AMM to trade the new price, and then mint back into the system.
+
+    /**
+     * @notice Collect collateral and BXS from redemption pool
+     * @dev Redemption is split into two functions to prevent flash loans removing 
+     * @dev BXS/collateral from the system, use an AMM to trade new price and then mint back
+     * @param colIdx integer value of the collateral index
+     * @return bxsAmount Amount of BXS redeemed
+     * @return collateralAmount Amount of collateral redeemed
+     */ 
     function collectRedemption(uint256 colIdx) external returns (uint256 bxsAmount, uint256 collateralAmount) {
         require(redeemPaused[colIdx] == false, "Redeeming is paused");
         require((lastRedeemed[msg.sender].add(redemptionDelay)) <= block.number, "Too soon");
@@ -568,8 +591,14 @@ contract BraxPoolV3 is Owned {
         }
     }
 
-    // Function can be called by an BXS holder to have the protocol buy back BXS with excess collateral value from a desired collateral pool
-    // This can also happen if the collateral ratio > 1
+    /**
+     * @notice Trigger buy back of BXS with excess collateral from a desired collateral pool
+     * @notice when the current collateralization rate > global collateral ratio
+     * @param colIdx Index of the collateral to buy back with
+     * @param bxsAmount Amount of BXS to buy back
+     * @param colOutMin Minimum amount of collateral to use to buyback
+     * @return colOut Amount of collateral used to purchase BXS
+     */
     function buyBackBxs(uint256 colIdx, uint256 bxsAmount, uint256 colOutMin) external collateralEnabled(colIdx) returns (uint256 colOut) {
         require(buyBackPaused[colIdx] == false, "Buyback is paused");
         uint256 bxsPrice = getBXSPrice();
@@ -601,10 +630,14 @@ contract BraxPoolV3 is Owned {
         bbkHourlyCum[curEpochHr()] += collateralEquivalentD18;
     }
 
-    // When the protocol is recollateralizing, we need to give a discount of FXS to hit the new CR target
-    // Thus, if the target collateral ratio is higher than the actual value of collateral, minters get FXS for adding collateral
-    // This function simply rewards anyone that sends collateral to a pool with the same amount of FXS + the bonus rate
-    // Anyone can call this function to recollateralize the protocol and take the extra FXS value from the bonus rate as an arb opportunity
+    /**
+     * @notice Reward users who send collateral to a pool with the same amount of BXS + set bonus rate
+     * @notice Anyone can call this function to recollateralize the pool and get extra BXS
+     * @param colIdx Index of the collateral to recollateralize
+     * @param collateralAmount Amount of collateral being deposited
+     * @param bxsOutMin Minimum amount of BXS to accept
+     * @return bxsOut Amount of BXS distributed
+     */
     function recollateralize(uint256 colIdx, uint256 collateralAmount, uint256 bxsOutMin) external collateralEnabled(colIdx) returns (uint256 bxsOut) {
         require(recollateralizePaused[colIdx] == false, "Recollat is paused");
         uint256 collateralAmountD18 = collateralAmount * (10 ** missingDecimals[colIdx]);
@@ -636,7 +669,10 @@ contract BraxPoolV3 is Owned {
 
     /* ========== RESTRICTED FUNCTIONS, MINTER ONLY ========== */
 
-    // Bypasses the gassy mint->redeem cycle for AMOs to borrow collateral
+    /**
+     * @notice Allow AMO Minters to borrow without gas intensive mint->redeem cycle
+     * @param collateralAmount Amount of collateral the AMO minter will borrow
+     */
     function amoMinterBorrow(uint256 collateralAmount) external onlyAMOMinters {
         // Checks the colIdx of the minter as an additional safety check
         uint256 minterColIdx = IBraxAMOMinter(msg.sender).colIdx();
@@ -653,6 +689,12 @@ contract BraxPoolV3 is Owned {
 
     /* ========== RESTRICTED FUNCTIONS, CUSTODIAN CAN CALL TOO ========== */
 
+    /**
+     * @notice Allow AMO Minters to borrow without gas intensive mint->redeem cycle
+     * @param colIdx Collateral to toggle data for
+     * @param togIdx Specific value to toggle
+     * @dev togIdx, 0 = mint, 1 = redeem, 2 = buyback, 3 = recollateralize, 4 = borrowing
+     */
     function toggleMRBR(uint256 colIdx, uint8 togIdx) external onlyByOwnGovCust {
         if (togIdx == 0) mintPaused[colIdx] = !mintPaused[colIdx];
         else if (togIdx == 1) redeemPaused[colIdx] = !redeemPaused[colIdx];
@@ -739,25 +781,44 @@ contract BraxPoolV3 is Owned {
         emit FeesSet(colIdx, newMintFee, newRedeemFee, newBuybackFee, newRecollatFee);
     }
 
+    /**
+     * @notice Set the parameters of the pool
+     * @param newBonusRate Index of the collateral to be modified
+     * @param newRedemptionDelay Number of blocks to wait before being able to collectRedemption()
+     */
     function setPoolParameters(uint256 newBonusRate, uint256 newRedemptionDelay) external onlyByOwnGov {
         bonusRate = newBonusRate;
         redemptionDelay = newRedemptionDelay;
         emit PoolParametersSet(newBonusRate, newRedemptionDelay);
     }
 
+    /**
+     * @notice Set the price thresholds of the pool, preventing minting or redeeming when trading would be more effective
+     * @param newMintPriceThreshold Price at which minting is allowed
+     * @param newRedeemPriceThreshold Price at which redemptions are allowed
+     */
     function setPriceThresholds(uint256 newMintPriceThreshold, uint256 newRedeemPriceThreshold) external onlyByOwnGov {
         mintPriceThreshold = newMintPriceThreshold;
         redeemPriceThreshold = newRedeemPriceThreshold;
         emit PriceThresholdsSet(newMintPriceThreshold, newRedeemPriceThreshold);
     }
 
-    function setBbkRctPerHour(uint256 _bbkMaxColE18OutPerHour, uint256 _rctMaxFxsOutPerHour) external onlyByOwnGov {
+    /**
+     * @notice Set the buyback and recollateralization maximum amounts for the pool
+     * @param _bbkMaxColE18OutPerHour Maximum amount of collateral per hour to be used for buyback
+     * @param _rctMaxBxsOutPerHour Maximum amount of BXS per hour allowed to be given for recollateralization
+     */
+    function setBbkRctPerHour(uint256 _bbkMaxColE18OutPerHour, uint256 _rctMaxBxsOutPerHour) external onlyByOwnGov {
         bbkMaxColE18OutPerHour = _bbkMaxColE18OutPerHour;
-        rctMaxFxsOutPerHour = _rctMaxFxsOutPerHour;
-        emit BbkRctPerHourSet(_bbkMaxColE18OutPerHour, _rctMaxFxsOutPerHour);
+        rctMaxBxsOutPerHour = _rctMaxBxsOutPerHour;
+        emit BbkRctPerHourSet(_bbkMaxColE18OutPerHour, _rctMaxBxsOutPerHour);
     }
 
-    // Set the Chainlink oracles
+    /**
+     * @notice Set the chainlink oracles for the pool
+     * @param _braxBtcChainlinkAddr BRAX / BTC chainlink oracle
+     * @param _bxsBtcChainlinkAddr BXS / BTC chainlink oracle
+     */
     function setOracles(address _braxBtcChainlinkAddr, address _bxsBtcChainlinkAddr) external onlyByOwnGov {
         // Set the instances
         priceFeedBRAXBTC = AggregatorV3Interface(_braxBtcChainlinkAddr);
@@ -770,12 +831,20 @@ contract BraxPoolV3 is Owned {
         emit OraclesSet(_braxBtcChainlinkAddr, _bxsBtcChainlinkAddr);
     }
 
+    /**
+     * @notice Set the custodian address for the pool
+     * @param newCustodian New custodian address
+     */
     function setCustodian(address newCustodian) external onlyByOwnGov {
         custodianAddress = newCustodian;
 
         emit CustodianSet(newCustodian);
     }
 
+    /**
+     * @notice Set the timelock address for the pool
+     * @param newTimelock New timelock address
+     */
     function setTimelock(address newTimelock) external onlyByOwnGov {
         timelockAddress = newTimelock;
 
@@ -788,7 +857,7 @@ contract BraxPoolV3 is Owned {
     event FeesSet(uint256 colIdx, uint256 newMintFee, uint256 newRedeemFee, uint256 newBuybackFee, uint256 newRecollatFee);
     event PoolParametersSet(uint256 newBonusRate, uint256 newRedemptionDelay);
     event PriceThresholdsSet(uint256 newBonusRate, uint256 newRedemptionDelay);
-    event BbkRctPerHourSet(uint256 bbkMaxColE18OutPerHour, uint256 rctMaxFxsOutPerHour);
+    event BbkRctPerHourSet(uint256 bbkMaxColE18OutPerHour, uint256 rctMaxBxsOutPerHour);
     event AMOMinterAdded(address amoMinterAddr);
     event AMOMinterRemoved(address amoMinterAddr);
     event OraclesSet(address braxBtcChainlinkAddr, address bxsBtcChainlinkAddr);

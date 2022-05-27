@@ -101,17 +101,29 @@ contract BRAXShares is ERC20Custom, AccessControl, Owned {
 
     /* ========== RESTRICTED FUNCTIONS ========== */
 
+    /**
+     * @notice Sets the oracle address for BXS
+     * @param newOracle Address of the new BXS oracle
+     */
     function setOracle(address newOracle) external onlyByOwnGov {
         require(newOracle != address(0), "Zero address detected");
 
         oracleAddress = newOracle;
     }
 
+    /**
+     * @notice Set a new timelock address
+     * @param newTimelock Address of the new timelock
+     */
     function setTimelock(address newTimelock) external onlyByOwnGov {
         require(newTimelock != address(0), "Timelock address cannot be 0");
         timelockAddress = newTimelock;
     }
-    
+
+    /**
+     * @notice Set the address of BRAX
+     * @param braxContractAddress Address of BRAX
+     */
     function setBRAXAddress(address braxContractAddress) external onlyByOwnGov {
         require(braxContractAddress != address(0), "Zero address detected");
 
@@ -120,15 +132,28 @@ contract BRAXShares is ERC20Custom, AccessControl, Owned {
         emit BRAXAddressSet(braxContractAddress);
     }
 
+    /**
+     * @notice Set the minimum amount of BXS required to join DAO
+     * @param minBXS amount of BXS required to join DAO
+     */
     function setBXSMinDAO(uint256 minBXS) external onlyByOwnerOrGovernance {
         BXS_DAO_MIN = minBXS;
     }
     
+    /**
+     * @notice Mint new BXS
+     * @param to Address to mint to
+     * @param amount Amount to mint
+     */
     function mint(address to, uint256 amount) public onlyPools {
         _mint(to, amount);
     }
     
-    // This function is what other brax pools will call to mint new BXS (similar to the BRAX mint) 
+    /**
+     * @notice Mint new BXS via pool
+     * @param mAddress Address to mint to
+     * @param mAmount Amount to mint
+     */
     function poolMint(address mAddress, uint256 mAmount) external onlyPools {        
         if(trackingVotes){
             uint32 srcRepNum = numCheckpoints[address(this)];
@@ -142,7 +167,11 @@ contract BRAXShares is ERC20Custom, AccessControl, Owned {
         emit BXSMinted(address(this), mAddress, mAmount);
     }
 
-    // This function is what other brax pools will call to burn BXS 
+    /**
+     * @notice Burn BXS via pool
+     * @param bAddress Address to burn from
+     * @param bAmount Amount to burn
+     */
     function poolBurnFrom(address bAddress, uint256 bAmount) external onlyPools {
         if(trackingVotes){
             trackVotes(bAddress, address(this), uint96(bAmount));
@@ -156,12 +185,14 @@ contract BRAXShares is ERC20Custom, AccessControl, Owned {
         emit BXSBurned(bAddress, address(this), bAmount);
     }
 
+    /// @notice Toggles tracking votes
     function toggleVotes() external onlyByOwnGov {
         trackingVotes = !trackingVotes;
     }
 
     /* ========== OVERRIDDEN PUBLIC FUNCTIONS ========== */
 
+    /// @dev Overwritten to track votes
     function transfer(address recipient, uint256 amount) public virtual override returns (bool) {
         if(trackingVotes){
             // Transfer votes
@@ -172,6 +203,7 @@ contract BRAXShares is ERC20Custom, AccessControl, Owned {
         return true;
     }
 
+    /// @dev Overwritten to track votes
     function transferFrom(address sender, address recipient, uint256 amount) public virtual override returns (bool) {
         if(trackingVotes){
             // Transfer votes
@@ -239,8 +271,8 @@ contract BRAXShares is ERC20Custom, AccessControl, Owned {
 
     /* ========== INTERNAL FUNCTIONS ========== */
 
-    // From compound's _moveDelegates
-    // Keep track of votes. "Delegates" is a misnomer here
+    /// @dev From compound's _moveDelegates
+    /// @dev Keep track of votes. "Delegates" is a misnomer here
     function trackVotes(address srcRep, address dstRep, uint96 amount) internal {
         if (srcRep != dstRep && amount > 0) {
             if (srcRep != address(0)) {

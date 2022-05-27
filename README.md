@@ -34,14 +34,14 @@ Frax is the first fractional-algorithmic stablecoin protocol. Frax is open-sourc
 Testing requires two terminals, one to run a localhost hardhat node and one to connect and run the tests
 
 Console 1: Node
-
+Within the base directory, type the following commands:
 ```
 cd ./src/hardhat
-npx hardhat node
+yarn node:fork
 ```
 
 Console 2: Client
-
+Within the base directory, type the following commands:
 ```
 cd ./src/hardhat
 yarn test [optional: test/filename.ts]

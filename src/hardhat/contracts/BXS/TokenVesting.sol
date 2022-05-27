@@ -61,7 +61,7 @@ contract TokenVesting {
         uint256 cliffDuration,
         uint256 duration,
         bool revocable
-    ) public {
+    ) {
         require(beneficiary != address(0), "TokenVesting: beneficiary is the zero address");
         // solhint-disable-next-line max-line-length
         require(cliffDuration <= duration, "TokenVesting: cliff is longer than duration");
