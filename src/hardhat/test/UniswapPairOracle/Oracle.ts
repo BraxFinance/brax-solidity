@@ -138,7 +138,7 @@ describe('Oracle', function () {
 		const enableWbtc = await deployedPool.toggleCollateral(0);
 		await enableWbtc.wait();
 
-		const OracleFactory = await ethers.getContractFactory('ChainlinkWBTCBTCPriceConsumer');
+		const OracleFactory = await ethers.getContractFactory('ChainlinkPriceConsumer');
 		wbtcOracle = await OracleFactory.deploy('0xfdFD9C85aD200c506Cf9e21F1FD8dd01932FBB23');
 		await wbtcOracle.deployed();
 

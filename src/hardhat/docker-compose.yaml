@@ -1,0 +1,8 @@
+services:
+    oracle-updater:
+        env_file:
+            - .env
+        image: oracle-updater
+        build:
+            context: .
+            dockerfile: Dockerfile

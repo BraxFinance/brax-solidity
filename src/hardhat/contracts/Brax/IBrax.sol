@@ -52,7 +52,7 @@ interface IBrax {
   function setController(address _controllerAddress ) external;
   function setWBTCBTCOracle(address _wbtcBtcConsumerAddress ) external;
   function setBRAXWBtcOracle(address _brax_oracle_addr, address _wbtcAddress ) external;
-  function setBXSAddress(address _fxs_address ) external;
+  function setBXSAddress(address _bxs_address ) external;
   function setBXSBtcOracle(address _bxsOracleAddr, address _wbtcAddress ) external;
   function setBraxStep(uint256 _newStep ) external;
   function setMintingFee(uint256 minFee ) external;

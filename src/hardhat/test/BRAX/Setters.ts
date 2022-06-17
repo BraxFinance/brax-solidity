@@ -90,7 +90,7 @@ describe('Setters', function () {
 
 	// Gotcha - the wbtc/btc oracle needs to be wrapped in the price consumer aggregator
 	it('Should allow the correct address to set the wBTC:BTC Oracle', async function () {
-		const OracleFactory = await ethers.getContractFactory('ChainlinkWBTCBTCPriceConsumer');
+		const OracleFactory = await ethers.getContractFactory('ChainlinkPriceConsumer');
 		const deployedOracle = await OracleFactory.deploy('0xfdFD9C85aD200c506Cf9e21F1FD8dd01932FBB23');
 		await deployedOracle.deployed();
 

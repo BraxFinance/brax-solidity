@@ -27,6 +27,27 @@ describe('Pools', function () {
 		await brax.deployed();
 	});
 
+	it('Should deploy properly', async function () {
+		let poolManager: SignerWithAddress;
+		let custodian: SignerWithAddress;
+		let timelock: SignerWithAddress;
+
+		[poolManager, custodian, timelock] = await ethers.getSigners();
+
+		const PoolFactory = await ethers.getContractFactory('BraxPoolV3');
+		const deployedPool = await PoolFactory.deploy(
+			poolManager.address,
+			custodian.address,
+			timelock.address,
+			[wbtc],
+			['2100000000000000'],
+			[3000, 5000, 4500, 4500],
+			brax.address,
+			randomAddress,
+		);
+		await deployedPool.deployed();
+	});
+
 	it('Should allow a permissioned address to add and remove a pool', async function () {
 		const PoolFactory = await ethers.getContractFactory('BraxPoolV3');
 		const deployedPool = await PoolFactory.deploy(

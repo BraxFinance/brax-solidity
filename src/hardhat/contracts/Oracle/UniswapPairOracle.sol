@@ -38,13 +38,11 @@ contract UniswapPairOracle is Owned {
     }
 
     constructor (
-        address factory, 
-        address tokenA, 
-        address tokenB, 
+        address pair_address,
         address _owner_address, 
         address _timelock_address
-    ) public Owned(_owner_address) {
-        IUniswapV2Pair _pair = IUniswapV2Pair(UniswapV2Library.pairFor(factory, tokenA, tokenB));
+    ) Owned(_owner_address) {
+        IUniswapV2Pair _pair = IUniswapV2Pair(pair_address);
         pair = _pair;
         token0 = _pair.token0();
         token1 = _pair.token1();

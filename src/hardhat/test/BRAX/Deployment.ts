@@ -67,4 +67,23 @@ describe('Deployment', function () {
 		expect(contractName).to.be.equal(name);
 		expect(contractSymbol).to.be.equal(symbol);
 	});
+
+	it('Should properly construct the DOMAIN_SEPARATOR', async function () {
+		const hashedName = ethers.utils.solidityKeccak256(['bytes'], [ethers.utils.toUtf8Bytes(await brax.name())]);
+		const hashedVersion = ethers.utils.solidityKeccak256(['bytes'], [ethers.utils.toUtf8Bytes('1')]);
+		const typeHash = ethers.utils.solidityKeccak256(
+			['bytes'],
+			[
+				ethers.utils.toUtf8Bytes(
+					'EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)',
+				),
+			],
+		);
+		const abiCoder = new ethers.utils.AbiCoder();
+		const types = ['bytes32', 'bytes32', 'bytes32', 'uint256', 'address'];
+		const values = [typeHash, hashedName, hashedVersion, 31337, brax.address];
+		const expectedDomainSeparator = ethers.utils.solidityKeccak256(['bytes'], [abiCoder.encode(types, values)]);
+		const domainSeparator = await brax.DOMAIN_SEPARATOR();
+		expect(expectedDomainSeparator).to.be.equal(domainSeparator);
+	});
 });

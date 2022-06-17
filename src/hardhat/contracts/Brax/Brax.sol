@@ -12,15 +12,18 @@ pragma solidity >=0.6.11;
 // ======================= BraxStableBTC (BRAX) =========================
 // ======================================================================
 // Brax Finance: https://github.com/BraxFinance
+// Based off of FRAX: https://github.com/FraxFinance
 
-// Primary Author(s)
+// FRAX Primary Author(s)
 // Travis Moore: https://github.com/FortisFortuna
 // Jason Huan: https://github.com/jasonhuan
 // Sam Kazemian: https://github.com/samkazemian
-// Andrew Mitchell: https://github.com/mitche50
 
-// Reviewer(s) / Contributor(s)
+// FRAX Original Reviewer(s) / Contributor(s)
 // Sam Sun: https://github.com/samczsun
+
+// BRAX Modification Author(s)
+// mitche50: https://github.com/mitche50
 
 import "../Common/Context.sol";
 import "../ERC20/IERC20.sol";
@@ -31,7 +34,7 @@ import "../Staking/Owned.sol";
 import "../BXS/BXS.sol";
 import "./Pools/BraxPoolV3.sol";
 import "../Oracle/UniswapPairOracle.sol";
-import "../Oracle/ChainlinkWBTCBTCPriceConsumer.sol";
+import "../Oracle/ChainlinkPriceConsumer.sol";
 import "../Governance/AccessControl.sol";
 
 contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
@@ -39,7 +42,7 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
 
     /* ========== STATE VARIABLES ========== */
     enum PriceChoice { BRAX, BXS }
-    ChainlinkWBTCBTCPriceConsumer private wbtcBtcPricer;
+    ChainlinkPriceConsumer private wbtcBtcPricer = ChainlinkPriceConsumer(0xfdFD9C85aD200c506Cf9e21F1FD8dd01932FBB23);
     uint8 private wbtcBtcPricerDecimals;
     UniswapPairOracle private braxWBtcOracle;
     UniswapPairOracle private bxsWBtcOracle;
@@ -107,7 +110,12 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
         require(_timelockAddress != address(0), "Zero address detected"); 
         name = _name;
         symbol = _symbol;
-        creatorAddress = _creatorAddress;
+        if(_creatorAddress != address(0)) {
+            creatorAddress = _creatorAddress;
+        } else {
+            creatorAddress = _msgSender();
+        }
+        
         timelockAddress = _timelockAddress;
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
         DEFAULT_ADMIN_ADDRESS = _msgSender();
@@ -430,7 +438,7 @@ contract BRAXBtcSynth is ERC20Custom, AccessControl, Owned {
         require(_wbtcBtcConsumerAddress != address(0), "Zero address detected");
 
         wbtcBtcConsumerAddress = _wbtcBtcConsumerAddress;
-        wbtcBtcPricer = ChainlinkWBTCBTCPriceConsumer(wbtcBtcConsumerAddress);
+        wbtcBtcPricer = ChainlinkPriceConsumer(wbtcBtcConsumerAddress);
         wbtcBtcPricerDecimals = wbtcBtcPricer.getDecimals();
 
         emit WBTCBTCOracleSet(_wbtcBtcConsumerAddress);

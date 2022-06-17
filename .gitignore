@@ -12,6 +12,7 @@ package-lock.json
 
 node_modules/*
 build/*
+cache/*
 
 .DS_STORE
 */.DS_STORE

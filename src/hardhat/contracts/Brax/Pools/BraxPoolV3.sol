@@ -36,7 +36,7 @@ import '../../Uniswap/TransferHelper.sol';
 import "../../Staking/Owned.sol";
 import "../../BXS/IBxs.sol";
 import "../../Brax/IBrax.sol";
-import "../../Oracle/AggregatorV3Interface.sol";
+import "../../Oracle/UniswapPairOracle.sol";
 import "../../Brax/IBraxAMOMinter.sol";
 import "../../ERC20/ERC20.sol";
 
@@ -54,14 +54,11 @@ contract BraxPoolV3 is Owned {
     IBxs private BXS;
 
     mapping(address => bool) public amoMinterAddresses; // minter address -> is it enabled
-    // TODO: Get aggregator
-    // IMPORTANT - set to random chainlink contract for testing
-    AggregatorV3Interface public priceFeedBRAXBTC = AggregatorV3Interface(0xfdFD9C85aD200c506Cf9e21F1FD8dd01932FBB23);
-    // TODO: Get aggregator
-    // IMPORTANT - set to random chainlink contract for testing
-    AggregatorV3Interface public priceFeedBXSBTC = AggregatorV3Interface(0xfdFD9C85aD200c506Cf9e21F1FD8dd01932FBB23);
+    UniswapPairOracle public priceFeedBRAXBTC;
+    UniswapPairOracle public priceFeedBXSBTC;
     uint256 private chainlinkBraxBtcDecimals;
     uint256 private chainlinkBxsBtcDecimals;
+    address private wbtcAddress;
 
     // Collateral
     address[] public collateralAddresses;
@@ -130,41 +127,54 @@ contract BraxPoolV3 is Owned {
         require(enabledCollaterals[collateralAddresses[colIdx]], "Collateral disabled");
         _;
     }
+
+    modifier validCollateral(uint256 colIdx) {
+        require(collateralAddresses[colIdx] != address(0), "Invalid collateral");
+        _;
+    }
  
     /* ========== CONSTRUCTOR ========== */
     
     constructor (
-        address _poolManagerAddress,
-        address _custodianAddress,
-        address _timelockAddress,
-        address[] memory _collateralAddresses,
-        uint256[] memory _poolCeilings,
-        uint256[] memory _initialFees,
-        address _braxAddress,
-        address _bxsAddress
-    ) Owned(_poolManagerAddress){
+        address poolManagerAddress,
+        address newCustodianAddress,
+        address newTimelockAddress,
+        address[] memory newCollateralAddresses,
+        uint256[] memory newPoolCeilings,
+        uint256[] memory initialFees,
+        address braxAddress,
+        address bxsAddress,
+        address braxPriceFeed,
+        address bxsPriceFeed,
+        address genWbtcAddress
+    ) Owned(poolManagerAddress){
         // Core
-        timelockAddress = _timelockAddress;
-        custodianAddress = _custodianAddress;
+        timelockAddress = newTimelockAddress;
+        custodianAddress = newCustodianAddress;
 
         // BRAX and BXS
-        BRAX = IBrax(_braxAddress);
-        BXS = IBxs(_bxsAddress);
+        BRAX = IBrax(braxAddress);
+        BXS = IBxs(bxsAddress);
+
+        // Price feeds
+        priceFeedBRAXBTC = UniswapPairOracle(braxPriceFeed);
+        priceFeedBXSBTC = UniswapPairOracle(bxsPriceFeed);
+        wbtcAddress = genWbtcAddress;
 
         // Fill collateral info
-        collateralAddresses = _collateralAddresses;
-        for (uint256 i = 0; i < _collateralAddresses.length; i++){ 
+        collateralAddresses = newCollateralAddresses;
+        for (uint256 i = 0; i < newCollateralAddresses.length; i++){ 
             // For fast collateral address -> collateral idx lookups later
-            collateralAddrToIdx[_collateralAddresses[i]] = i;
+            collateralAddrToIdx[newCollateralAddresses[i]] = i;
 
             // Set all of the collaterals initially to disabled
-            enabledCollaterals[_collateralAddresses[i]] = false;
+            enabledCollaterals[newCollateralAddresses[i]] = false;
 
             // Add in the missing decimals
-            missingDecimals.push(uint256(18).sub(ERC20(_collateralAddresses[i]).decimals()));
+            missingDecimals.push(uint256(18).sub(ERC20(newCollateralAddresses[i]).decimals()));
 
             // Add in the collateral symbols
-            collateralSymbols.push(ERC20(_collateralAddresses[i]).symbol());
+            collateralSymbols.push(ERC20(newCollateralAddresses[i]).symbol());
 
             // Initialize unclaimed pool collateral
             unclaimedPoolCollateral.push(0);
@@ -173,10 +183,10 @@ contract BraxPoolV3 is Owned {
             collateralPrices.push(PRICE_PRECISION);
 
             // Handle the fees
-            mintingFee.push(_initialFees[0]);
-            redemptionFee.push(_initialFees[1]);
-            buybackFee.push(_initialFees[2]);
-            recollatFee.push(_initialFees[3]);
+            mintingFee.push(initialFees[0]);
+            redemptionFee.push(initialFees[1]);
+            buybackFee.push(initialFees[2]);
+            recollatFee.push(initialFees[3]);
 
             // Handle the pauses
             mintPaused.push(false);
@@ -187,7 +197,7 @@ contract BraxPoolV3 is Owned {
         }
 
         // Pool ceiling
-        poolCeilings = _poolCeilings;
+        poolCeilings = newPoolCeilings;
 
         // Set the decimals
         chainlinkBraxBtcDecimals = priceFeedBRAXBTC.decimals();
@@ -220,12 +230,12 @@ contract BraxPoolV3 is Owned {
     /**
      * @notice Compute the threshold for buyback and recollateralization to throttle
      * @notice both in times of high volatility
+     * @dev helper function to help limit volatility in calculations
      * @param cur Current amount already consumed in the current hour
      * @param max Maximum allowable in the current hour
      * @param theo Amount to theoretically distribute, used to check against available amounts
      * @return amount Amount allowable to distribute
      */
-    /// @dev helper function to help limit volatility in calculations
     function comboCalcBbkRct(uint256 cur, uint256 max, uint256 theo) internal pure returns (uint256 amount) {
         if (cur >= max) {
             // If the hourly limit has already been reached, return 0;
@@ -243,7 +253,7 @@ contract BraxPoolV3 is Owned {
                 // Otherwise, return the theoretical amount
                 return theo;
             }
-        } 
+        }
     }
 
     /* ========== VIEWS ========== */
@@ -288,25 +298,27 @@ contract BraxPoolV3 is Owned {
     }
 
     /**
-     * @notice Return current price from chainlink feed for BRAX
-     * @return braxPrice Current price of BRAX chainlink feed
+     * @notice Return current price from oracle feed for BRAX
+     * @return braxPrice Current price of BRAX oracle feed
+     * @dev NOTE: The system will launch without CL oracles, but once 
+     * deployed there will be a wrapper that returns the data in the same format
      */
     function getBRAXPrice() public view returns (uint256 braxPrice) {
-        (uint80 roundID, int price, , uint256 updatedAt, uint80 answeredInRound) = priceFeedBRAXBTC.latestRoundData();
-        require(price >= 0 && updatedAt!= 0 && answeredInRound >= roundID, "Invalid chainlink price");
+        uint256 price = priceFeedBRAXBTC.consult(wbtcAddress, PRICE_PRECISION);
 
-        return uint256(price).mul(PRICE_PRECISION).div(10 ** chainlinkBraxBtcDecimals);
+        return price.mul(PRICE_PRECISION).div(10 ** chainlinkBraxBtcDecimals);
     }
 
     /**
-     * @notice Return current price from chainlink feed for BXS
-     * @return bxsPrice Current price of BXS chainlink feed
+     * @notice Return current price from oracle feed for BXS
+     * @return bxsPrice Current price of BXS oracle feed
+     * @dev NOTE: The system will launch without CL oracles, but once 
+     * deployed there will be a wrapper that returns the data in the same format
      */
     function getBXSPrice() public view returns (uint256 bxsPrice) {
-        (uint80 roundID, int price, , uint256 updatedAt, uint80 answeredInRound) = priceFeedBXSBTC.latestRoundData();
-        require(price >= 0 && updatedAt!= 0 && answeredInRound >= roundID, "Invalid chainlink price");
+        uint256 price = priceFeedBXSBTC.consult(wbtcAddress, PRICE_PRECISION);
 
-        return uint256(price).mul(PRICE_PRECISION).div(10 ** chainlinkBxsBtcDecimals);
+        return price.mul(PRICE_PRECISION).div(10 ** chainlinkBraxBtcDecimals);
     }
 
     /**
@@ -318,6 +330,8 @@ contract BraxPoolV3 is Owned {
      * @return braxPrice price of BRAX in collateral (decimals are equivalent to collateral, not BRAX)
      */
     function getBRAXInCollateral(uint256 colIdx, uint256 braxAmount) public view returns (uint256 braxPrice) {
+        require(collateralPrices[colIdx] > 0, "Price missing from collateral");
+
         return braxAmount.mul(PRICE_PRECISION).div(10 ** missingDecimals[colIdx]).div(collateralPrices[colIdx]);
     }
 
@@ -326,7 +340,7 @@ contract BraxPoolV3 is Owned {
      * @param colIdx index of collateral token (e.g. 0 for wBTC, 1 for renBTC)
      * @return collatAmount amount of collateral not waiting to be redeemed (E18)
      */
-    function freeCollatBalance(uint256 colIdx) public view returns (uint256 collatAmount) {
+    function freeCollatBalance(uint256 colIdx) public view validCollateral(colIdx) returns (uint256 collatAmount) {
         return ERC20(collateralAddresses[colIdx]).balanceOf(address(this)).sub(unclaimedPoolCollateral[colIdx]);
     }
 
@@ -337,10 +351,13 @@ contract BraxPoolV3 is Owned {
     function collatBtcBalance() external view returns (uint256 balanceTally) {
         balanceTally = 0;
 
-        for (uint256 i = 0; i < collateralAddresses.length; i++){ 
+        for (uint256 i = 0; i < collateralAddresses.length; i++){
+            // It's possible collateral has been removed, so skip any address(0) collateral
+            if(collateralAddresses[i] == address(0)) {
+                continue;
+            }
             balanceTally += freeCollatBalance(i).mul(10 ** missingDecimals[i]).mul(collateralPrices[i]).div(PRICE_PRECISION);
         }
-
     }
 
     /**
@@ -354,11 +371,11 @@ contract BraxPoolV3 is Owned {
         uint256 globalCollatValue = BRAX.globalCollateralValue();
 
         if (globalCollateralRatio > PRICE_PRECISION) globalCollateralRatio = PRICE_PRECISION; // Handles an overcollateralized contract with CR > 1
-        uint256 requiredCollatDollarValueD18 = (totalSupply.mul(globalCollateralRatio)).div(PRICE_PRECISION); // Calculates collateral needed to back each 1 BRAX with 1 BTC of collateral at current collat ratio
+        uint256 requiredCollatBTCValueD18 = (totalSupply.mul(globalCollateralRatio)).div(PRICE_PRECISION); // Calculates collateral needed to back each 1 BRAX with 1 BTC of collateral at current collat ratio
         
-        if (globalCollatValue > requiredCollatDollarValueD18) {
+        if (globalCollatValue > requiredCollatBTCValueD18) {
             // Get the theoretical buyback amount
-            uint256 theoreticalBbkAmt = globalCollatValue.sub(requiredCollatDollarValueD18);
+            uint256 theoreticalBbkAmt = globalCollatValue.sub(requiredCollatBTCValueD18);
 
             // See how much has collateral has been issued this hour
             uint256 currentHrBbk = bbkHourlyCum[curEpochHr()];
@@ -371,7 +388,7 @@ contract BraxPoolV3 is Owned {
 
     /**
      * @notice Returns the missing amount of collateral (in E18) needed to maintain the collateral ratio
-     * @return balanceTally total BTC value in pool in E18
+     * @return balanceTally total BTC missing to maintain collateral ratio
      */
     function recollatTheoColAvailableE18() public view returns (uint256 balanceTally) {
         uint256 braxTotalSupply = BRAX.totalSupply();
@@ -399,10 +416,13 @@ contract BraxPoolV3 is Owned {
         // Get the amount of collateral theoretically available
         uint256 recollatTheoAvailableE18 = recollatTheoColAvailableE18();
 
-        // Get the amount of FXS theoretically outputtable
+        // Return 0 if already overcollateralized
+        if (recollatTheoAvailableE18 <= 0) return 0;
+
+        // Get the amount of BXS theoretically outputtable
         uint256 bxsTheoOut = recollatTheoAvailableE18.mul(PRICE_PRECISION).div(bxsPrice);
 
-        // See how much FXS has been issued this hour
+        // See how much BXS has been issued this hour
         uint256 currentHrRct = rctHourlyCum[curEpochHr()];
 
         // Account for the throttling
@@ -505,7 +525,7 @@ contract BraxPoolV3 is Owned {
     ) {
         require(redeemPaused[colIdx] == false, "Redeeming is paused");
 
-        // Prevent unnecessary redemptions that could adversely affect the FXS price
+        // Prevent unnecessary redemptions that could adversely affect the BXS price
         require(getBRAXPrice() <= redeemPriceThreshold, "Brax price too high");
 
         uint256 globalCollateralRatio = BRAX.globalCollateralRatio();
@@ -564,7 +584,7 @@ contract BraxPoolV3 is Owned {
     function collectRedemption(uint256 colIdx) external returns (uint256 bxsAmount, uint256 collateralAmount) {
         require(redeemPaused[colIdx] == false, "Redeeming is paused");
         require((lastRedeemed[msg.sender].add(redemptionDelay)) <= block.number, "Too soon");
-        bool sendFXS = false;
+        bool sendBXS = false;
         bool sendCollateral = false;
 
         // Use Checks-Effects-Interactions pattern
@@ -572,7 +592,7 @@ contract BraxPoolV3 is Owned {
             bxsAmount = redeemBXSBalances[msg.sender];
             redeemBXSBalances[msg.sender] = 0;
             unclaimedPoolBXS = unclaimedPoolBXS.sub(bxsAmount);
-            sendFXS = true;
+            sendBXS = true;
         }
         
         if(redeemCollateralBalances[msg.sender][colIdx] > 0){
@@ -583,7 +603,7 @@ contract BraxPoolV3 is Owned {
         }
 
         // Send out the tokens
-        if(sendFXS){
+        if(sendBXS){
             TransferHelper.safeTransfer(address(BXS), msg.sender, bxsAmount);
         }
         if(sendCollateral){
@@ -604,15 +624,15 @@ contract BraxPoolV3 is Owned {
         uint256 bxsPrice = getBXSPrice();
         uint256 availableExcessCollatDv = buybackAvailableCollat();
 
-        // If the total collateral value is higher than the amount required at the current collateral ratio then buy back up to the possible FXS with the desired collateral
-        require(availableExcessCollatDv > 0, "Insuf Collat Avail For BBK");
+        // If the total collateral value is higher than the amount required at the current collateral ratio then buy back up to the possible BXS with the desired collateral
+        require(availableExcessCollatDv > 0, "No Collat Avail For BBK");
 
         // Make sure not to take more than is available
-        uint256 bxsDollarValueD18 = bxsAmount.mul(bxsPrice).div(PRICE_PRECISION);
-        require(bxsDollarValueD18 <= availableExcessCollatDv, "Insuf Collat Avail For BBK");
+        uint256 bxsBTCValueD18 = bxsAmount.mul(bxsPrice).div(PRICE_PRECISION);
+        require(bxsBTCValueD18 <= availableExcessCollatDv, "Insuf Collat Avail For BBK");
 
-        // Get the equivalent amount of collateral based on the market value of FXS provided 
-        uint256 collateralEquivalentD18 = bxsDollarValueD18.mul(PRICE_PRECISION).div(collateralPrices[colIdx]);
+        // Get the equivalent amount of collateral based on the market value of BXS provided 
+        uint256 collateralEquivalentD18 = bxsBTCValueD18.mul(PRICE_PRECISION).div(collateralPrices[colIdx]);
         colOut = collateralEquivalentD18.div(10 ** missingDecimals[colIdx]); // In its natural decimals()
 
         // Subtract the buyback fee
@@ -621,7 +641,7 @@ contract BraxPoolV3 is Owned {
         // Check for slippage
         require(colOut >= colOutMin, "Collateral slippage");
 
-        // Take in and burn the FXS, then send out the collateral
+        // Take in and burn the BXS, then send out the collateral
         BXS.poolBurnFrom(msg.sender, bxsAmount);
         TransferHelper.safeTransfer(collateralAddresses[colIdx], msg.sender, colOut);
 
@@ -643,13 +663,13 @@ contract BraxPoolV3 is Owned {
         uint256 collateralAmountD18 = collateralAmount * (10 ** missingDecimals[colIdx]);
         uint256 bxsPrice = getBXSPrice();
 
-        // Get the amount of FXS actually available (accounts for throttling)
+        // Get the amount of BXS actually available (accounts for throttling)
         uint256 bxsActuallyAvailable = recollatAvailableBxs();
 
-        // Calculated the attempted amount of FXS
+        // Calculated the attempted amount of BXS
         bxsOut = collateralAmountD18.mul(PRICE_PRECISION.add(bonusRate).sub(recollatFee[colIdx])).div(bxsPrice);
 
-        // Make sure there is FXS available
+        // Make sure there is BXS available
         require(bxsOut <= bxsActuallyAvailable, "Insuf BXS Avail For RCT");
 
         // Check slippage
@@ -690,12 +710,15 @@ contract BraxPoolV3 is Owned {
     /* ========== RESTRICTED FUNCTIONS, CUSTODIAN CAN CALL TOO ========== */
 
     /**
-     * @notice Allow AMO Minters to borrow without gas intensive mint->redeem cycle
+     * @notice Toggles the pause status for different functions within the pool
      * @param colIdx Collateral to toggle data for
      * @param togIdx Specific value to toggle
      * @dev togIdx, 0 = mint, 1 = redeem, 2 = buyback, 3 = recollateralize, 4 = borrowing
      */
     function toggleMRBR(uint256 colIdx, uint8 togIdx) external onlyByOwnGovCust {
+        require(togIdx <= 4, "Invalid togIdx");
+        require(colIdx < collateralAddresses.length, "Invalid collateral");
+
         if (togIdx == 0) mintPaused[colIdx] = !mintPaused[colIdx];
         else if (togIdx == 1) redeemPaused[colIdx] = !redeemPaused[colIdx];
         else if (togIdx == 2) buyBackPaused[colIdx] = !buyBackPaused[colIdx];
@@ -724,6 +747,8 @@ contract BraxPoolV3 is Owned {
     /// @notice Remove an AMO Minter Address
     /// @param amoMinterAddr Address of the AMO minter to remove
     function removeAMOMinter(address amoMinterAddr) external onlyByOwnGov {
+        require(amoMinterAddresses[amoMinterAddr] == true, "Minter not active");
+
         amoMinterAddresses[amoMinterAddr] = false;
         
         emit AMOMinterRemoved(amoMinterAddr);
@@ -732,21 +757,23 @@ contract BraxPoolV3 is Owned {
     /** 
      * @notice Set the collateral price for a specific collateral
      * @param colIdx Index of the collateral
-     * @param _newPrice New price of the collateral
+     * @param newPrice New price of the collateral
      */
-    function setCollateralPrice(uint256 colIdx, uint256 _newPrice) external onlyByOwnGov {
+    function setCollateralPrice(uint256 colIdx, uint256 newPrice) external onlyByOwnGov validCollateral(colIdx) {
+        require(collateralPrices[colIdx] != newPrice, "Same pricing");
+
         // Only to be used for collateral without chainlink price feed
         // Immediate priorty to get a price feed in place
-        collateralPrices[colIdx] = _newPrice;
+        collateralPrices[colIdx] = newPrice;
 
-        emit CollateralPriceSet(colIdx, _newPrice);
+        emit CollateralPriceSet(colIdx, newPrice);
     }
 
     /**
      * @notice Toggles collateral for use in the pool
      * @param colIdx Index of the collateral to be enabled
      */
-    function toggleCollateral(uint256 colIdx) external onlyByOwnGov {
+    function toggleCollateral(uint256 colIdx) external onlyByOwnGov validCollateral(colIdx) {
         address colAddress = collateralAddresses[colIdx];
         enabledCollaterals[colAddress] = !enabledCollaterals[colAddress];
 
@@ -758,7 +785,8 @@ contract BraxPoolV3 is Owned {
      * @param colIdx Index of the collateral to be modified
      * @param newCeiling New ceiling amount of collateral
      */
-    function setPoolCeiling(uint256 colIdx, uint256 newCeiling) external onlyByOwnGov {
+    function setPoolCeiling(uint256 colIdx, uint256 newCeiling) external onlyByOwnGov validCollateral(colIdx) {
+        require(poolCeilings[colIdx] != newCeiling, "Same ceiling");
         poolCeilings[colIdx] = newCeiling;
 
         emit PoolCeilingSet(colIdx, newCeiling);
@@ -772,7 +800,7 @@ contract BraxPoolV3 is Owned {
      * @param newBuybackFee New buyback fee for collateral
      * @param newRecollatFee New recollateralization fee for collateral
      */
-    function setFees(uint256 colIdx, uint256 newMintFee, uint256 newRedeemFee, uint256 newBuybackFee, uint256 newRecollatFee) external onlyByOwnGov {
+    function setFees(uint256 colIdx, uint256 newMintFee, uint256 newRedeemFee, uint256 newBuybackFee, uint256 newRecollatFee) external onlyByOwnGov validCollateral(colIdx) {
         mintingFee[colIdx] = newMintFee;
         redemptionFee[colIdx] = newRedeemFee;
         buybackFee[colIdx] = newBuybackFee;
@@ -805,30 +833,32 @@ contract BraxPoolV3 is Owned {
 
     /**
      * @notice Set the buyback and recollateralization maximum amounts for the pool
-     * @param _bbkMaxColE18OutPerHour Maximum amount of collateral per hour to be used for buyback
-     * @param _rctMaxBxsOutPerHour Maximum amount of BXS per hour allowed to be given for recollateralization
+     * @param newBbkMaxColE18OutPerHour Maximum amount of collateral per hour to be used for buyback
+     * @param newBrctMaxBxsOutPerHour Maximum amount of BXS per hour allowed to be given for recollateralization
      */
-    function setBbkRctPerHour(uint256 _bbkMaxColE18OutPerHour, uint256 _rctMaxBxsOutPerHour) external onlyByOwnGov {
-        bbkMaxColE18OutPerHour = _bbkMaxColE18OutPerHour;
-        rctMaxBxsOutPerHour = _rctMaxBxsOutPerHour;
-        emit BbkRctPerHourSet(_bbkMaxColE18OutPerHour, _rctMaxBxsOutPerHour);
+    function setBbkRctPerHour(uint256 newBbkMaxColE18OutPerHour, uint256 newBrctMaxBxsOutPerHour) external onlyByOwnGov {
+        bbkMaxColE18OutPerHour = newBbkMaxColE18OutPerHour;
+        rctMaxBxsOutPerHour = newBrctMaxBxsOutPerHour;
+        emit BbkRctPerHourSet(newBbkMaxColE18OutPerHour, newBrctMaxBxsOutPerHour);
     }
 
     /**
      * @notice Set the chainlink oracles for the pool
-     * @param _braxBtcChainlinkAddr BRAX / BTC chainlink oracle
-     * @param _bxsBtcChainlinkAddr BXS / BTC chainlink oracle
+     * @param braxBtcChainlinkAddr BRAX / BTC chainlink oracle
+     * @param bxsBtcChainlinkAddr BXS / BTC chainlink oracle
      */
-    function setOracles(address _braxBtcChainlinkAddr, address _bxsBtcChainlinkAddr) external onlyByOwnGov {
+    function setOracles(address braxBtcChainlinkAddr, address bxsBtcChainlinkAddr) external onlyByOwnGov {
         // Set the instances
-        priceFeedBRAXBTC = AggregatorV3Interface(_braxBtcChainlinkAddr);
-        priceFeedBXSBTC = AggregatorV3Interface(_bxsBtcChainlinkAddr);
+        priceFeedBRAXBTC = UniswapPairOracle(braxBtcChainlinkAddr);
+        priceFeedBXSBTC = UniswapPairOracle(bxsBtcChainlinkAddr);
 
         // Set the decimals
         chainlinkBraxBtcDecimals = priceFeedBRAXBTC.decimals();
+        require(chainlinkBraxBtcDecimals > 0, "Invalid BRAX Oracle");
         chainlinkBxsBtcDecimals = priceFeedBXSBTC.decimals();
+        require(chainlinkBxsBtcDecimals > 0, "Invalid BXS Oracle");
         
-        emit OraclesSet(_braxBtcChainlinkAddr, _bxsBtcChainlinkAddr);
+        emit OraclesSet(braxBtcChainlinkAddr, bxsBtcChainlinkAddr);
     }
 
     /**
@@ -836,6 +866,7 @@ contract BraxPoolV3 is Owned {
      * @param newCustodian New custodian address
      */
     function setCustodian(address newCustodian) external onlyByOwnGov {
+        require(newCustodian != address(0), "Custodian zero address");
         custodianAddress = newCustodian;
 
         emit CustodianSet(newCustodian);
@@ -846,6 +877,7 @@ contract BraxPoolV3 is Owned {
      * @param newTimelock New timelock address
      */
     function setTimelock(address newTimelock) external onlyByOwnGov {
+        require(newTimelock != address(0), "Timelock zero address");
         timelockAddress = newTimelock;
 
         emit TimelockSet(newTimelock);

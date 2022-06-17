@@ -7,7 +7,7 @@ contract ChainlinkPriceConsumer {
 
     AggregatorV3Interface internal priceFeed;
 
-    constructor (address _priceFeed) public {
+    constructor (address _priceFeed) {
         priceFeed = AggregatorV3Interface(_priceFeed);
     }
 

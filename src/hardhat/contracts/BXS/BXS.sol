@@ -12,15 +12,18 @@ pragma solidity >=0.6.11;
 // ========================= BRAXShares (BXS) ===========================
 // ======================================================================
 // Brax Finance: https://github.com/BraxFinance
+// Based off of FRAX: https://github.com/FraxFinance
 
-// Primary Author(s)
+// FRAX Primary Author(s)
 // Travis Moore: https://github.com/FortisFortuna
 // Jason Huan: https://github.com/jasonhuan
 // Sam Kazemian: https://github.com/samkazemian
-// Andrew Mitchell: https://github.com/mitche50
 
-// Reviewer(s) / Contributor(s)
+// FRAX Original Reviewer(s) / Contributor(s)
 // Sam Sun: https://github.com/samczsun
+
+// BRAX Modification Author(s)
+// mitche50: https://github.com/mitche50
 
 import "../Common/Context.sol";
 import "../ERC20/ERC20Custom.sol";
@@ -69,34 +72,29 @@ contract BRAXShares is ERC20Custom, AccessControl, Owned {
     } 
     
     modifier onlyByOwnGov() {
-        require(msg.sender == owner || msg.sender == timelockAddress, "You are not an owner or the governance timelock");
-        _;
-    }
-
-    modifier onlyByOwnerOrGovernance() {
-        require(msg.sender == owner || msg.sender == timelockAddress, "Not the owner or the governance timelock");
+        require(msg.sender == owner || msg.sender == timelockAddress, "Only owner or governance timelock");
         _;
     }
 
     /* ========== CONSTRUCTOR ========== */
 
     constructor (
-        string memory _name,
-        string memory _symbol, 
-        address _oracleAddress,
-        address _creatorAddress,
-        address _timelockAddress
-    ) public Owned(_creatorAddress){
-        require((_oracleAddress != address(0)) && (_timelockAddress != address(0)), "Zero address detected"); 
-        name = _name;
-        symbol = _symbol;
-        oracleAddress = _oracleAddress;
-        timelockAddress = _timelockAddress;
+        string memory newName,
+        string memory newSymbol, 
+        address newOracleAddress,
+        address newCreatorAddress,
+        address newTimelockAddress
+    ) Owned(newCreatorAddress){
+        require((newOracleAddress != address(0)) && (newTimelockAddress != address(0)), "Zero address detected"); 
+        name = newName;
+        symbol = newSymbol;
+        oracleAddress = newOracleAddress;
+        timelockAddress = newTimelockAddress;
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
-        _mint(_creatorAddress, genesisSupply);
+        _mint(newCreatorAddress, genesisSupply);
 
         // Do a checkpoint for the owner
-        _writeCheckpoint(_creatorAddress, 0, 0, uint96(genesisSupply));
+        _writeCheckpoint(newCreatorAddress, 0, 0, uint96(genesisSupply));
     }
 
     /* ========== RESTRICTED FUNCTIONS ========== */
@@ -117,6 +115,7 @@ contract BRAXShares is ERC20Custom, AccessControl, Owned {
      */
     function setTimelock(address newTimelock) external onlyByOwnGov {
         require(newTimelock != address(0), "Timelock address cannot be 0");
+
         timelockAddress = newTimelock;
     }
 
@@ -132,11 +131,16 @@ contract BRAXShares is ERC20Custom, AccessControl, Owned {
         emit BRAXAddressSet(braxContractAddress);
     }
 
+    /// @notice Toggles tracking votes
+    function toggleVotes() external onlyByOwnGov {
+        trackingVotes = !trackingVotes;
+    }
+
     /**
      * @notice Set the minimum amount of BXS required to join DAO
      * @param minBXS amount of BXS required to join DAO
      */
-    function setBXSMinDAO(uint256 minBXS) external onlyByOwnerOrGovernance {
+    function setBXSMinDAO(uint256 minBXS) external onlyByOwnGov {
         BXS_DAO_MIN = minBXS;
     }
     
@@ -154,7 +158,7 @@ contract BRAXShares is ERC20Custom, AccessControl, Owned {
      * @param mAddress Address to mint to
      * @param mAmount Amount to mint
      */
-    function poolMint(address mAddress, uint256 mAmount) external onlyPools {        
+    function poolMint(address mAddress, uint256 mAmount) external onlyPools {
         if(trackingVotes){
             uint32 srcRepNum = numCheckpoints[address(this)];
             uint96 srcRepOld = srcRepNum > 0 ? checkpoints[address(this)][srcRepNum - 1].votes : 0;
@@ -183,11 +187,6 @@ contract BRAXShares is ERC20Custom, AccessControl, Owned {
 
         super._burnFrom(bAddress, bAmount);
         emit BXSBurned(bAddress, address(this), bAmount);
-    }
-
-    /// @notice Toggles tracking votes
-    function toggleVotes() external onlyByOwnGov {
-        trackingVotes = !trackingVotes;
     }
 
     /* ========== OVERRIDDEN PUBLIC FUNCTIONS ========== */
@@ -330,10 +329,10 @@ contract BRAXShares is ERC20Custom, AccessControl, Owned {
     /// @notice An event thats emitted when a voters account's vote balance changes
     event VoterVotesChanged(address indexed voter, uint previousBalance, uint newBalance);
 
-    // Track FXS burned
+    // Track BXS burned
     event BXSBurned(address indexed from, address indexed to, uint256 amount);
 
-    // Track FXS minted
+    // Track BXS minted
     event BXSMinted(address indexed from, address indexed to, uint256 amount);
 
     event BRAXAddressSet(address addr);
