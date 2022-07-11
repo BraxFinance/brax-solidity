@@ -1,9 +1,3 @@
-// constructor (
-//     address pair,
-//     address _owner_address,
-//     address _timelock_address
-// )
-
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { ethers } from 'hardhat';
 

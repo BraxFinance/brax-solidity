@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 pragma solidity >=0.6.11;
 
-interface IFraxGaugeFXSRewardsDistributor {
+interface IBraxGaugeBXSRewardsDistributor {
   function acceptOwnership() external;
   function curator_address() external view returns(address);
   function currentReward(address gauge_address) external view returns(uint256 reward_amount);
@@ -18,6 +18,6 @@ interface IFraxGaugeFXSRewardsDistributor {
   function setGaugeController(address _gauge_controller_address) external;
   function setGaugeState(address _gauge_address, bool _is_middleman, bool _is_active) external;
   function setTimelock(address _new_timelock) external;
-  function timelock_address() external view returns(address);
+  function timelockAddress() external view returns(address);
   function toggleDistributions() external;
 }

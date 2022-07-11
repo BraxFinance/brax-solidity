@@ -6,7 +6,7 @@ pragma solidity >=0.6.11;
 contract BlockMiner {
     uint256 public blocksMined;
 
-    constructor () public {
+    constructor () {
         blocksMined = 0;
     }
 

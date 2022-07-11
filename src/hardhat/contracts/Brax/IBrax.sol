@@ -63,7 +63,7 @@ interface IBrax {
   function setRefreshCooldown(uint256 _newCooldown ) external;
   function setTimelock(address newTimelock ) external;
   function symbol() external view returns (string memory);
-  function timelock_address() external view returns (address);
+  function timelockAddress() external view returns (address);
   function toggleCollateralRatio() external;
   function totalSupply() external view returns (uint256);
   function transfer(address recipient, uint256 amount ) external returns (bool);

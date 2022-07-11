@@ -6,7 +6,7 @@ import './FixedPoint96.sol';
 
 contract Testing {
 
-    constructor () public {}
+    constructor () {}
 
     /// @dev The minimum tick that may be passed to #getSqrtRatioAtTick computed from log base 1.0001 of 2**-128
     int24 internal constant MIN_TICK = -887272;

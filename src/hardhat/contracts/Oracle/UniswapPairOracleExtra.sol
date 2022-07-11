@@ -47,7 +47,7 @@ contract UniswapPairOracleExtra is Owned {
         address _timelock_address,
         string memory _description,
         address _address_to_consult
-    ) public Owned(_owner_address) {
+    ) Owned(_owner_address) {
         IUniswapV2Pair _pair = IUniswapV2Pair(pair_address);
         pair = _pair;
         token0 = _pair.token0();

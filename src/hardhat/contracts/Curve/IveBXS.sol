@@ -2,7 +2,7 @@
 pragma solidity >=0.6.11;
 pragma abicoder v2;
 
-interface IveFXS {
+interface IveBXS {
 
     struct LockedBalance {
         int128 amount;
@@ -30,15 +30,15 @@ interface IveFXS {
     function totalSupply() external view returns (uint256);
     function totalSupply(uint256 t) external view returns (uint256);
     function totalSupplyAt(uint256 _block) external view returns (uint256);
-    function totalFXSSupply() external view returns (uint256);
-    function totalFXSSupplyAt(uint256 _block) external view returns (uint256);
+    function totalBXSSupply() external view returns (uint256);
+    function totalBXSSupplyAt(uint256 _block) external view returns (uint256);
     function changeController(address _newController) external;
     function token() external view returns (address);
     function supply() external view returns (uint256);
     function locked(address addr) external view returns (LockedBalance memory);
     function epoch() external view returns (uint256);
-    function point_history(uint256 arg0) external view returns (int128 bias, int128 slope, uint256 ts, uint256 blk, uint256 fxs_amt);
-    function user_point_history(address arg0, uint256 arg1) external view returns (int128 bias, int128 slope, uint256 ts, uint256 blk, uint256 fxs_amt);
+    function point_history(uint256 arg0) external view returns (int128 bias, int128 slope, uint256 ts, uint256 blk, uint256 bxs_amt);
+    function user_point_history(address arg0, uint256 arg1) external view returns (int128 bias, int128 slope, uint256 ts, uint256 blk, uint256 bxs_amt);
     function user_point_epoch(address arg0) external view returns (uint256);
     function slope_changes(uint256 arg0) external view returns (int128);
     function controller() external view returns (address);
